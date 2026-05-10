@@ -43,7 +43,7 @@ func BuildPKCS12(key *rsa.PrivateKey, certDER, caDER []byte) ([]byte, error) {
 		return nil, fmt.Errorf("parse CA cert: %w", err)
 	}
 
-	p12, err := pkcs12.Legacy.Encode(key, cert, []*x509.Certificate{ca}, "")
+	p12, err := pkcs12.Modern.Encode(key, cert, []*x509.Certificate{ca}, "")
 	if err != nil {
 		return nil, fmt.Errorf("encode PKCS12: %w", err)
 	}
