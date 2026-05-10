@@ -20,7 +20,7 @@ func RenderClientsConf(clients []RadiusClient) string {
 		fmt.Fprintf(&b, "client %s_home {\n", c.Username)
 		fmt.Fprintf(&b, "    ipaddr    = %s\n", ipaddr)
 		fmt.Fprintf(&b, "    secret    = %s\n", c.Secret)
-		fmt.Fprintf(&b, "    proto     = tls\n")
+		b.WriteString("    proto     = tls\n")
 		fmt.Fprintf(&b, "    shortname = %s-home\n", c.Username)
 		b.WriteString("}\n\n")
 	}

@@ -27,6 +27,9 @@ func TestRenderClientsConf_WithIP(t *testing.T) {
 	if !strings.Contains(out, "proto     = tls") {
 		t.Error("missing proto = tls (required for RadSec)")
 	}
+	if !strings.Contains(out, "shortname = mbillow-home") {
+		t.Error("missing shortname")
+	}
 }
 
 func TestRenderClientsConf_NoIP(t *testing.T) {
