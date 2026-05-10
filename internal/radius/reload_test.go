@@ -80,10 +80,13 @@ func TestReload_NoPodFound(t *testing.T) {
 }
 
 func TestReload_PodExists(t *testing.T) {
+	// The fake clientset's RESTClient panics when building exec requests (nil
+	// internal transport). Recover so we can still assert that Reload reached
+	// the exec phase (i.e., it found the pod rather than returning early).
+	podNotFound := false
 	defer func() {
-		if r := recover(); r != nil {
-			// Expected: fake clientset will panic when accessing REST client internals
-			// This is OK — the important thing is we didn't get "no pod found"
+		if r := recover(); r != nil && podNotFound {
+			t.Errorf("Reload returned pod-not-found instead of finding the pod: %v", r)
 		}
 	}()
 
@@ -99,13 +102,9 @@ func TestReload_PodExists(t *testing.T) {
 	k8s := fake.NewSimpleClientset(pod)
 	restCfg := &rest.Config{Host: "https://fake"}
 
-	// The fake clientset doesn't provide a real RESTClient, so Reload will fail.
-	// We just verify it doesn't fail with "no pod found" error since the pod exists.
 	err := radius.Reload(ctx, k8s, restCfg, "default", "app=freeradius")
-
-	// Any error other than "no pod found" is acceptable.
-	// If we got here without hitting a panic, check the error message.
 	if err != nil && err.Error() == "no FreeRADIUS pod found matching app=freeradius" {
+		podNotFound = true
 		t.Error("got pod-not-found error but pod was present")
 	}
 }
