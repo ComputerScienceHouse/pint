@@ -90,7 +90,7 @@ func (s *ClientStore) Upsert(client RadiusClient) {
 
 // Delete removes the entry for username.
 func (s *ClientStore) Delete(username string) {
-	filtered := s.clients[:0]
+	filtered := make([]RadiusClient, 0, len(s.clients))
 	for _, c := range s.clients {
 		if c.Username != username {
 			filtered = append(filtered, c)

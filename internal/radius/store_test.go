@@ -49,7 +49,9 @@ func TestStore_UpsertOverwrites(t *testing.T) {
 	ctx := context.Background()
 	k8s := fake.NewSimpleClientset()
 	store := radius.NewClientStore(k8s, "default", "pint-radius-clients")
-	store.Load(ctx)
+	if err := store.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "old"})
 	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "new"})
@@ -67,7 +69,9 @@ func TestStore_Delete(t *testing.T) {
 	ctx := context.Background()
 	k8s := fake.NewSimpleClientset()
 	store := radius.NewClientStore(k8s, "default", "pint-radius-clients")
-	store.Load(ctx)
+	if err := store.Load(ctx); err != nil {
+		t.Fatal(err)
+	}
 
 	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "s"})
 	store.Delete("mbillow")
