@@ -4,6 +4,7 @@ package profile
 import (
 	"fmt"
 
+	"github.com/google/uuid"
 	"howett.net/plist"
 )
 
@@ -19,13 +20,14 @@ type MobileconfigParams struct {
 // BuildMobileconfig returns a plist-encoded Apple Configuration Profile
 // containing a WiFi (EAP-TLS), PKCS#12 identity, and CA certificate payload.
 func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
-	caUUID := fmt.Sprintf("CA-%s-0001", p.Username)
-	clientUUID := fmt.Sprintf("CLIENT-%s-0001", p.Username)
-	profileUUID := fmt.Sprintf("PROFILE-%s-0001", p.Username)
+	caUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.ca."+p.Username)).String()
+	clientUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.client."+p.Username)).String()
+	profileUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.profile."+p.Username)).String()
+	wifiUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.wifi."+p.Username)).String()
 
 	wifiPayload := map[string]interface{}{
 		"PayloadType":        "com.apple.wifi.managed",
-		"PayloadUUID":        fmt.Sprintf("WIFI-%s-0001", p.Username),
+		"PayloadUUID":        wifiUUID,
 		"PayloadIdentifier":  fmt.Sprintf("com.csh.pint.wifi.%s", p.Username),
 		"PayloadVersion":     1,
 		"PayloadDisplayName": "CSH WiFi",

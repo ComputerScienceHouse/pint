@@ -45,9 +45,15 @@ func TestBuildMobileconfig_ContainsSSID(t *testing.T) {
 }
 
 func TestBuildMobileconfig_ContainsPayloadTypes(t *testing.T) {
-	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
 	certDER, caDER := StubCertAndCA(t, key)
-	p12, _ := profile.BuildPKCS12(key, certDER, caDER)
+	p12, err := profile.BuildPKCS12(key, certDER, caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	params := profile.MobileconfigParams{
 		SSID:        "CSH",
