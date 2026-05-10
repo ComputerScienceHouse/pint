@@ -12,7 +12,7 @@ import (
 	"log"
 	"time"
 
-	cshauth "github.com/ComputerScienceHouse/csh-auth"
+	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
@@ -69,35 +69,31 @@ func main() {
 		log.Fatalf("radsec server cert: %v", err)
 	}
 
-	// csh-auth — Init is a method on CSHAuth; signature:
-	//   func (auth *CSHAuth) Init(clientID, clientSecret, secret, state, server_host, redirect_uri, auth_uri string, scopes []string)
-	// secret and state are derived from clientSecret and a fixed state token.
-	auth := &cshauth.CSHAuth{}
-	auth.Init(
+	// csh-auth v2: package-level Init returns (Auth, error)
+	auth, err := cshauth.Init(
 		cfg.ClientID,
 		cfg.ClientSecret,
-		cfg.ClientSecret, // HMAC signing secret — reuse client secret
-		"pint",          // OAuth2 state token
 		cfg.ServerURL,
-		cfg.CallbackURL,
 		cfg.LoginURL,
+		cfg.CallbackURL,
 		[]string{"openid", "profile"},
 	)
+	if err != nil {
+		log.Fatalf("csh-auth init: %v", err)
+	}
 
 	r := gin.Default()
 	r.LoadHTMLGlob("templates/*.html")
 
 	// Public routes
 	r.GET("/", handlers.IndexHandler(cfg))
-	r.GET("/auth/login", auth.AuthRequest)
-	r.GET("/auth/callback", auth.AuthCallback)
-	r.GET("/auth/logout", auth.AuthLogout)
+	r.GET("/auth/login", auth.HandleLogin)
+	r.GET("/auth/callback", auth.HandleCallback)
+	r.GET("/auth/logout", auth.HandleLogout)
 
 	// Protected routes
 	protected := r.Group("/")
-	protected.Use(func(c *gin.Context) {
-		auth.AuthWrapper(func(c *gin.Context) { c.Next() })(c)
-	})
+	protected.Use(auth.CookieMiddleware())
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler(cfg))
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))

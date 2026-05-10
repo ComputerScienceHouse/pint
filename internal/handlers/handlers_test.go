@@ -9,16 +9,17 @@ import (
 
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
+	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/gin-gonic/gin"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
 
-// testAuth injects a mock cshauth value into the Gin context.
+// testAuth injects a mock csh-auth v2 Claims into the Gin context.
 func testAuth(username string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set("cshauth", map[string]interface{}{
-			"preferred_username": username,
+		c.Set(cshauth.ContextKey, &cshauth.Claims{
+			UserInfo: cshauth.UserInfo{Username: username},
 		})
 		c.Next()
 	}
