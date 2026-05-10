@@ -20,7 +20,10 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface) gin.Handler
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
-		store.Load(c.Request.Context())
+		if err := store.Load(c.Request.Context()); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 
 		client := store.FindByUsername(username)
 
@@ -110,7 +113,9 @@ func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		radius.Reload(c.Request.Context(), k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector) //nolint:errcheck
+		if err := radius.Reload(c.Request.Context(), k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
+			c.Header("X-Reload-Warning", err.Error())
+		}
 
 		c.Redirect(http.StatusFound, "/radius")
 	}
