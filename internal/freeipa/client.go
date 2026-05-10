@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 type Client struct {
@@ -18,6 +19,7 @@ type Client struct {
 	user       string
 	pass       string
 	httpClient *http.Client
+	mu         sync.Mutex
 	session    string
 }
 
@@ -57,7 +59,9 @@ func (c *Client) Login() error {
 
 	for _, cookie := range resp.Cookies() {
 		if cookie.Name == "ipa_session" {
+			c.mu.Lock()
 			c.session = cookie.Value
+			c.mu.Unlock()
 			return nil
 		}
 	}
@@ -126,7 +130,10 @@ func (c *Client) doRPC(method string, args []interface{}, kwargs map[string]inte
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Referer", fmt.Sprintf("https://%s/ipa", c.host))
-	req.AddCookie(&http.Cookie{Name: "ipa_session", Value: c.session})
+	c.mu.Lock()
+	session := c.session
+	c.mu.Unlock()
+	req.AddCookie(&http.Cookie{Name: "ipa_session", Value: session})
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
