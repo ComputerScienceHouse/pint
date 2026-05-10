@@ -1,7 +1,7 @@
 package config_test
 
 import (
-	"os"
+	"strings"
 	"testing"
 
 	"github.com/ComputerScienceHouse/pint/internal/config"
@@ -60,10 +60,29 @@ func TestLoad_MissingRequired(t *testing.T) {
 	vars := fullEnv()
 	delete(vars, "PINT_CLIENT_ID")
 	setEnv(t, vars)
-	os.Unsetenv("PINT_CLIENT_ID")
 	_, err := config.Load()
 	if err == nil {
 		t.Fatal("expected error for missing PINT_CLIENT_ID, got nil")
+	}
+	if !strings.Contains(err.Error(), "PINT_CLIENT_ID") {
+		t.Errorf("error should mention PINT_CLIENT_ID, got: %v", err)
+	}
+}
+
+func TestLoad_MultipleMissing(t *testing.T) {
+	vars := fullEnv()
+	delete(vars, "PINT_CLIENT_ID")
+	delete(vars, "PINT_IPA_HOST")
+	delete(vars, "PINT_WIFI_SSID")
+	setEnv(t, vars)
+	_, err := config.Load()
+	if err == nil {
+		t.Fatal("expected error for missing vars, got nil")
+	}
+	for _, key := range []string{"PINT_CLIENT_ID", "PINT_IPA_HOST", "PINT_WIFI_SSID"} {
+		if !strings.Contains(err.Error(), key) {
+			t.Errorf("error should mention %s, got: %v", key, err)
+		}
 	}
 }
 
