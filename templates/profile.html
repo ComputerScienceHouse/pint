@@ -1,0 +1,66 @@
+<!-- templates/profile.html -->
+{{template "layout.html" .}}
+{{define "title"}}WiFi Profile — PINT{{end}}
+{{define "content"}}
+<h2>Your WiFi Profile</h2>
+<p class="text-muted">Certificates are generated fresh on each download and are valid for 5 years.</p>
+
+<div class="card mt-4">
+    <div class="card-header"><strong>iOS &amp; macOS</strong></div>
+    <div class="card-body">
+        <p>Opens directly in Settings. Tap install to connect automatically.</p>
+        <button class="btn btn-primary" onclick="downloadProfile('ios')" id="btn-ios">
+            Download .mobileconfig
+        </button>
+        <span id="spinner-ios" class="ml-2" style="display:none;">Generating…</span>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header"><strong>Android</strong></div>
+    <div class="card-body">
+        <ol>
+            <li>Download and install the CA certificate below.</li>
+            <li>Download and install the .p12 client certificate.</li>
+            <li>Go to WiFi settings → Add network → select <strong>{{.SSID}}</strong> → EAP-TLS → choose your certificate.</li>
+        </ol>
+        <a href="/profile/ca" class="btn btn-outline-secondary mr-2">Download CA Cert (.cer)</a>
+        <button class="btn btn-primary" onclick="downloadProfile('android')" id="btn-android">
+            Download Client Cert (.p12)
+        </button>
+        <span id="spinner-android" class="ml-2" style="display:none;">Generating…</span>
+    </div>
+</div>
+{{end}}
+{{define "scripts"}}
+<script>
+function downloadProfile(platform) {
+    const btn = document.getElementById('btn-' + platform);
+    const spinner = document.getElementById('spinner-' + platform);
+    btn.disabled = true;
+    spinner.style.display = 'inline';
+
+    fetch('/profile/generate?platform=' + platform, {method: 'POST'})
+        .then(r => {
+            if (!r.ok) throw new Error('Generation failed: ' + r.status);
+            const cd = r.headers.get('Content-Disposition') || '';
+            const match = cd.match(/filename="?([^"]+)"?/);
+            const filename = match ? match[1] : 'csh-wifi.' + platform;
+            return r.blob().then(blob => ({blob, filename}));
+        })
+        .then(({blob, filename}) => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        })
+        .catch(err => alert(err.message))
+        .finally(() => {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+        });
+}
+</script>
+{{end}}

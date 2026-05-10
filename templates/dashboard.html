@@ -1,0 +1,26 @@
+<!-- templates/dashboard.html -->
+{{template "layout.html" .}}
+{{define "title"}}Dashboard — PINT{{end}}
+{{define "content"}}
+<h2>Welcome, {{.Username}}</h2>
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">WiFi Profile</h5>
+                <p class="card-text">Download your personal certificate profile for iOS, macOS, or Android.</p>
+                <a href="/profile" class="btn btn-primary">Get Profile</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Home RADIUS</h5>
+                <p class="card-text">Connect your home router to the CSH network using your own RADIUS shared secret.</p>
+                <a href="/radius" class="btn btn-secondary">Manage Secret</a>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

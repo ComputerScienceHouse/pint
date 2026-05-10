@@ -1,0 +1,85 @@
+<!-- templates/radius.html -->
+{{template "layout.html" .}}
+{{define "title"}}Home RadSec — PINT{{end}}
+{{define "content"}}
+<h2>Home RADIUS Secret</h2>
+
+<div class="card mt-3">
+    <div class="card-body">
+        <dl class="row">
+            <dt class="col-sm-3">RADIUS Server</dt>
+            <dd class="col-sm-9"><code>{{.RadiusServer}}</code></dd>
+            <dt class="col-sm-3">Auth Port</dt>
+            <dd class="col-sm-9"><code>2083</code></dd>
+            <dt class="col-sm-3">Protocol</dt>
+            <dd class="col-sm-9">RadSec (RADIUS over TLS — RFC 6614)</dd>
+        </dl>
+        <p class="text-info"><small>Your router must support RadSec (RFC 6614 / RADIUS over TLS).</small></p>
+    </div>
+</div>
+
+{{if .Client}}
+<div class="card mt-4">
+    <div class="card-header"><strong>Your Current Secret</strong></div>
+    <div class="card-body">
+        <div class="form-group">
+            <label>Shared Secret</label>
+            <div class="input-group">
+                <input type="password" id="secret-field" class="form-control" value="{{.Client.Secret}}" readonly>
+                <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" onclick="toggleSecret()">Reveal</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <a href="/radius/client-cert" class="btn btn-outline-primary mr-2">Download Router Client Cert (.p12)</a>
+            <a href="/radius/ca" class="btn btn-outline-secondary">Download RadSec CA Cert (.cer)</a>
+        </div>
+
+        <form method="POST" action="/radius/secret" class="mt-3">
+            <div class="form-group">
+                <label for="ip_cidr">Source IP / CIDR <span class="text-muted">(recommended)</span></label>
+                <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
+                       placeholder="e.g. 192.168.1.0/24"
+                       value="{{.IPCIDR}}">
+                {{if not .HasIPCIDR}}
+                <small class="form-text text-warning">
+                    No IP set — your secret accepts connections from anywhere.
+                </small>
+                {{end}}
+            </div>
+            <button type="submit" class="btn btn-success">Save IP / Regenerate Secret</button>
+        </form>
+
+        <form method="POST" action="/radius/delete" class="mt-3"
+              onsubmit="return confirm('Remove your RADIUS secret? Your home router will stop working.');">
+            <button type="submit" class="btn btn-danger">Delete / Unenroll</button>
+        </form>
+    </div>
+</div>
+{{else}}
+<div class="card mt-4">
+    <div class="card-body text-center">
+        <h5>Set Up Home RadSec</h5>
+        <p>Generate a shared secret to use CSH WiFi on your home router via RadSec.</p>
+        <form method="POST" action="/radius/secret">
+            <div class="form-group">
+                <label for="ip_cidr">Source IP / CIDR <span class="text-muted">(recommended)</span></label>
+                <input type="text" class="form-control" id="ip_cidr" name="ip_cidr" placeholder="e.g. 192.168.1.0/24">
+                <small class="form-text text-muted">Leave blank to allow from any IP (not recommended).</small>
+            </div>
+            <button type="submit" class="btn btn-primary">Generate Secret</button>
+        </form>
+    </div>
+</div>
+{{end}}
+{{end}}
+{{define "scripts"}}
+<script>
+function toggleSecret() {
+    const f = document.getElementById('secret-field');
+    f.type = f.type === 'password' ? 'text' : 'password';
+}
+</script>
+{{end}}
