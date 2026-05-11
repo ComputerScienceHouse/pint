@@ -25,6 +25,8 @@ spec:
             - containerPort: 8080
               name: http
           envFrom:
+            - configMapRef:
+                name: {{ include "pint.fullname" . }}
             - secretRef:
                 name: {{ .Values.envSecret }}
           env:

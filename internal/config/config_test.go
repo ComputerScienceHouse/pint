@@ -19,8 +19,6 @@ func fullEnv() map[string]string {
 		"PINT_CLIENT_ID":               "test-client",
 		"PINT_CLIENT_SECRET":           "test-secret",
 		"PINT_SERVER_URL":              "http://localhost:8080",
-		"PINT_LOGIN_URL":               "http://localhost:8080/auth/login",
-		"PINT_CALLBACK_URL":            "http://localhost:8080/auth/callback",
 		"PINT_IPA_HOST":                "ipa.example.com",
 		"PINT_IPA_SERVICE_ACCOUNT":     "pint",
 		"PINT_IPA_PASSWORD":            "hunter2",

@@ -57,8 +57,6 @@ func Load() (*Config, error) {
 	cfg.ClientID = require("PINT_CLIENT_ID")
 	cfg.ClientSecret = require("PINT_CLIENT_SECRET")
 	cfg.ServerURL = require("PINT_SERVER_URL")
-	cfg.LoginURL = require("PINT_LOGIN_URL")
-	cfg.CallbackURL = require("PINT_CALLBACK_URL")
 	cfg.IPAHost = require("PINT_IPA_HOST")
 	cfg.IPAServiceAccount = require("PINT_IPA_SERVICE_ACCOUNT")
 	cfg.IPAPassword = require("PINT_IPA_PASSWORD")
@@ -85,6 +83,8 @@ func Load() (*Config, error) {
 	cfg.IPACertProfile = os.Getenv("PINT_IPA_CERT_PROFILE")
 	cfg.RadSecClientCertProfile = os.Getenv("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE")
 	cfg.RadSecServerCertProfile = os.Getenv("PINT_IPA_RADSEC_SERVER_CERT_PROFILE")
+	cfg.LoginURL = cfg.ServerURL + "/auth/login"
+	cfg.CallbackURL = cfg.ServerURL + "/auth/callback"
 	cfg.IPAPrincipal = principalFromDN(cfg.IPAServiceAccount)
 	cfg.IPAServiceHostname = hostnameFromPrincipal(cfg.IPAPrincipal)
 

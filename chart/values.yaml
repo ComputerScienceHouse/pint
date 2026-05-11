@@ -14,15 +14,37 @@ pint:
     tag: ""  # defaults to Chart.appVersion
     pullPolicy: IfNotPresent
 
-# Pre-existing Secret containing sensitive PINT environment variables.
-# Required when pint.enabled=true.  Must contain:
-#   PINT_CLIENT_ID, PINT_CLIENT_SECRET, PINT_SERVER_URL,
-#   PINT_LOGIN_URL, PINT_CALLBACK_URL,
-#   PINT_IPA_HOST, PINT_IPA_SERVICE_ACCOUNT, PINT_IPA_PASSWORD,
-#   PINT_IPA_CA_NAME, PINT_IPA_RADSEC_CA_NAME, PINT_IPA_ROOT_CA_NAME,
-#   PINT_WIFI_SSID, PINT_RADIUS_SERVER
-# Non-sensitive config (namespace, secret names, pod selector) is injected
-# directly by the chart and does not need to be in this Secret.
+# Non-sensitive PINT application configuration rendered into a ConfigMap.
+# Sensitive values (PINT_CLIENT_SECRET, PINT_IPA_PASSWORD) must still be
+# provided in the Secret named by envSecret below.
+config:
+  # OIDC
+  clientID: ""
+  serverURL: ""
+
+  # FreeIPA
+  ipaHost: ""
+  ipaServiceAccount: ""
+  ipaCAName: ""
+  ipaRadSecCAName: ""
+  ipaRootCAName: "ipa"
+  # Optional Dogtag cert profiles; leave blank to use CA defaults.
+  ipaCertProfile: ""
+  ipaRadSecClientCertProfile: ""
+  ipaRadSecServerCertProfile: ""
+  ipaSkipTLSVerify: false
+
+  # WiFi
+  wifiSSID: ""
+
+  # RADIUS
+  radiusServer: ""
+
+# Pre-existing Secret containing sensitive PINT credentials.
+# Required when pint.enabled=true. Must contain only:
+#   PINT_CLIENT_SECRET  - OIDC client secret
+#   PINT_IPA_PASSWORD   - FreeIPA service account password
+# All other config is rendered into a ConfigMap from the config block above.
 envSecret: pint-env
 
 # Names of the K8s Secrets PINT creates and manages at runtime.

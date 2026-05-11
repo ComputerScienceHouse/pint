@@ -5,6 +5,20 @@
 pint:
   enabled: false
 
+# Stub config values for dev; PINT itself runs locally so these are unused,
+# but they keep 'helm lint' and 'helm template' happy.
+config:
+  clientID: pint-dev
+  serverURL: http://localhost:8080
+  ipaHost: localhost:8088
+  ipaServiceAccount: pint
+  ipaCAName: ipa
+  ipaRadSecCAName: radsec
+  ipaRootCAName: ipa
+  ipaSkipTLSVerify: true
+  wifiSSID: CSH
+  radiusServer: localhost:2083
+
 freeradius:
   image:
     tag: dev
