@@ -26,5 +26,3 @@ freeradius:
   service:
     type: NodePort
     nodePort: 32083
-  # kind has no SCC restrictions; default permissions are fine.
-  securityContext: {}

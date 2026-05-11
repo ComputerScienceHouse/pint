@@ -11,7 +11,7 @@ spec:
   selector:
     {{- include "pint.freeradiusSelectorLabels" . | nindent 4 }}
   ports:
-    - port: {{ .Values.freeradius.service.port }}
+    - port: 2083
       targetPort: radsec
       name: radsec
       {{- if and (eq .Values.freeradius.service.type "NodePort") .Values.freeradius.service.nodePort }}

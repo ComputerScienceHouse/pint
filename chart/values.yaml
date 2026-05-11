@@ -8,7 +8,6 @@ serviceAccount:
 # Set enabled=false in dev to run PINT as a local process (make dev) instead.
 pint:
   enabled: true
-  replicaCount: 1
   image:
     repository: pint
     tag: ""  # defaults to Chart.appVersion
@@ -25,17 +24,16 @@ config:
   # FreeIPA
   ipaHost: ""
   ipaServiceAccount: ""
-  ipaCAName: ""
-  ipaRadSecCAName: ""
+  ipaCAName: "ipa"
+  ipaRadSecCAName: "radsec"
   ipaRootCAName: "ipa"
-  # Optional Dogtag cert profiles; leave blank to use CA defaults.
-  ipaCertProfile: ""
-  ipaRadSecClientCertProfile: ""
-  ipaRadSecServerCertProfile: ""
+  ipaCertProfile: "pint_wifi"
+  ipaRadSecClientCertProfile: "pint_radsec_client"
+  ipaRadSecServerCertProfile: "pint_radsec_server"
   ipaSkipTLSVerify: false
 
   # WiFi
-  wifiSSID: ""
+  wifiSSID: "CSH"
 
   # RADIUS
   radiusServer: ""
@@ -68,23 +66,10 @@ freeradius:
     pullPolicy: IfNotPresent
   service:
     type: LoadBalancer
-    port: 2083
     nodePort: null  # only used when type=NodePort
-  # Run as the freerad user (UID 101); Secret defaultMode 0444 ensures cert
-  # files are readable without root.  Override to {} for environments without
-  # pod security enforcement (e.g. local kind).
-  securityContext:
-    runAsNonRoot: true
-    runAsUser: 101
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop: [ALL]
 
 # OpenShift-specific resources.
 openshift:
   enabled: false
   route:
-    host: ""  # leave blank for an auto-assigned hostname
-    tls:
-      termination: edge
-      insecureEdgeTerminationPolicy: Redirect
+    host: ""

@@ -17,6 +17,6 @@ spec:
   port:
     targetPort: http
   tls:
-    termination: {{ .Values.openshift.route.tls.termination }}
-    insecureEdgeTerminationPolicy: {{ .Values.openshift.route.tls.insecureEdgeTerminationPolicy }}
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
 {{- end }}

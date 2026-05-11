@@ -23,10 +23,11 @@ spec:
           ports:
             - containerPort: 2083
               name: radsec
-          {{- with .Values.freeradius.securityContext }}
           securityContext:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
           volumeMounts:
             # Full-directory mount (not subPath) so K8s auto-syncs clients.conf
             # when the Secret changes; FreeRADIUS picks it up on the next SIGHUP.

@@ -49,11 +49,13 @@
         },
         "ipaCAName": {
           "type": "string",
-          "description": "FreeIPA CA name for WiFi client certificates."
+          "description": "FreeIPA CA name for WiFi client certificates.",
+          "default": "ipa"
         },
         "ipaRadSecCAName": {
           "type": "string",
-          "description": "FreeIPA CA name for RadSec certificates."
+          "description": "FreeIPA CA name for RadSec certificates.",
+          "default": "radsec"
         },
         "ipaRootCAName": {
           "type": "string",
@@ -62,15 +64,18 @@
         },
         "ipaCertProfile": {
           "type": "string",
-          "description": "Dogtag certificate profile for WiFi client certs. Leave blank to use the CA default."
+          "description": "Dogtag certificate profile for WiFi client certs.",
+          "default": "pint_wifi"
         },
         "ipaRadSecClientCertProfile": {
           "type": "string",
-          "description": "Dogtag certificate profile for RadSec router client certs. Leave blank to use the CA default."
+          "description": "Dogtag certificate profile for RadSec router client certs.",
+          "default": "pint_radsec_client"
         },
         "ipaRadSecServerCertProfile": {
           "type": "string",
-          "description": "Dogtag certificate profile for the FreeRADIUS server cert. Leave blank to use the CA default."
+          "description": "Dogtag certificate profile for the FreeRADIUS server cert.",
+          "default": "pint_radsec_server"
         },
         "ipaSkipTLSVerify": {
           "type": "boolean",
@@ -79,7 +84,8 @@
         },
         "wifiSSID": {
           "type": "string",
-          "description": "WiFi SSID embedded in generated device profiles."
+          "description": "WiFi SSID embedded in generated device profiles.",
+          "default": "CSH"
         },
         "radiusServer": {
           "type": "string",
@@ -117,12 +123,6 @@
           "type": "boolean",
           "description": "Deploy the PINT pod. Set false to run PINT as a local process instead.",
           "default": true
-        },
-        "replicaCount": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Number of PINT replicas.",
-          "default": 1
         },
         "image": {
           "type": "object",
@@ -195,19 +195,11 @@
               "enum": ["ClusterIP", "NodePort", "LoadBalancer"],
               "default": "LoadBalancer"
             },
-            "port": {
-              "type": "integer",
-              "default": 2083
-            },
             "nodePort": {
               "type": ["integer", "null"],
               "description": "NodePort number. Only used when service.type is NodePort."
             }
           }
-        },
-        "securityContext": {
-          "type": "object",
-          "description": "Pod security context for FreeRADIUS. Override to {} for environments without pod security enforcement."
         }
       }
     },
@@ -225,22 +217,7 @@
           "properties": {
             "host": {
               "type": "string",
-              "description": "Route hostname. Leave blank for an auto-assigned hostname."
-            },
-            "tls": {
-              "type": "object",
-              "properties": {
-                "termination": {
-                  "type": "string",
-                  "enum": ["edge", "reencrypt", "passthrough"],
-                  "default": "edge"
-                },
-                "insecureEdgeTerminationPolicy": {
-                  "type": "string",
-                  "enum": ["Allow", "Redirect", "None"],
-                  "default": "Redirect"
-                }
-              }
+              "description": "Route hostname. Omit for an auto-assigned hostname."
             }
           }
         }
