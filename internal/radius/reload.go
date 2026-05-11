@@ -19,36 +19,26 @@ import (
 // to the named Kubernetes Secret (creating it if needed).
 func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, clients []RadiusClient) error {
 	conf := RenderClientsConf(clients)
-	secret := &corev1.Secret{
+	return upsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
 		Data:       map[string][]byte{"clients.conf": []byte(conf)},
-	}
-	_, getErr := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
-	var err error
-	if errors.IsNotFound(getErr) {
-		_, err = k8s.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
-	} else {
-		_, err = k8s.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
-	}
-	return err
+	})
 }
 
 // WriteRadSecServerCert writes the FreeRADIUS TLS cert+key to the named K8s Secret.
-// Called at startup; creates or updates the Secret.
 func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, certPEM, keyPEM []byte) error {
-	secret := &corev1.Secret{
+	return upsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
-		Data: map[string][]byte{
-			"tls.crt": certPEM,
-			"tls.key": keyPEM,
-		},
-	}
-	_, getErr := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
-	var err error
-	if errors.IsNotFound(getErr) {
-		_, err = k8s.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
-	} else {
-		_, err = k8s.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
+		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
+	})
+}
+
+// upsertSecret creates or updates a Kubernetes Secret.
+func upsertSecret(ctx context.Context, k8s kubernetes.Interface, secret *corev1.Secret) error {
+	ns := secret.Namespace
+	_, err := k8s.CoreV1().Secrets(ns).Update(ctx, secret, metav1.UpdateOptions{})
+	if errors.IsNotFound(err) {
+		_, err = k8s.CoreV1().Secrets(ns).Create(ctx, secret, metav1.CreateOptions{})
 	}
 	return err
 }

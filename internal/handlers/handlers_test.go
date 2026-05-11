@@ -45,7 +45,7 @@ func minimalConfig() *config.Config {
 func TestIndexHandler(t *testing.T) {
 	r := gin.New()
 	r.HTMLRender = testTemplates()
-	r.GET("/", handlers.IndexHandler(minimalConfig()))
+	r.GET("/", handlers.IndexHandler())
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
@@ -61,7 +61,7 @@ func TestIndexHandler(t *testing.T) {
 func TestDashboardHandler(t *testing.T) {
 	r := gin.New()
 	r.HTMLRender = testTemplates()
-	r.GET("/dashboard", testAuth("mbillow"), handlers.DashboardHandler(minimalConfig()))
+	r.GET("/dashboard", testAuth("mbillow"), handlers.DashboardHandler())
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/dashboard", nil))

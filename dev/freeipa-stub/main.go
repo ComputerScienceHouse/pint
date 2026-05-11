@@ -17,8 +17,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 )
+
+const profileRadSecServer = "pint_radsec_server"
+
+var serialCounter atomic.Int64
 
 type caEntry struct {
 	key  *rsa.PrivateKey
@@ -36,6 +41,8 @@ func main() {
 	radSecCAName := flag.String("radsec-ca", getEnv("PINT_IPA_RADSEC_CA_NAME", "radsec"), "FreeIPA CA name for RadSec certs (PINT_IPA_RADSEC_CA_NAME)")
 	rootCAName := flag.String("root-ca", getEnv("PINT_IPA_ROOT_CA_NAME", "ipa"), "FreeIPA root CA name (PINT_IPA_ROOT_CA_NAME)")
 	flag.Parse()
+
+	serialCounter.Store(time.Now().UnixNano())
 
 	var err error
 	caStore, err = loadOrInitCAs(*dataDir, *wifiCAName, *radSecCAName, *rootCAName)
@@ -134,7 +141,7 @@ func loadOrCreateCA(dir, name, cn string, parent *caEntry) (*caEntry, error) {
 	}
 
 	tmpl := &x509.Certificate{
-		SerialNumber:          big.NewInt(time.Now().UnixNano()),
+		SerialNumber:          big.NewInt(serialCounter.Add(1)),
 		Subject:               pkix.Name{CommonName: cn, Organization: []string{"CSH.RIT.EDU"}},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
@@ -303,17 +310,14 @@ func signCSR(csrPEM []byte, profileID string, ca *caEntry) ([]byte, error) {
 	}
 
 	eku := x509.ExtKeyUsageClientAuth
-	if profileID == "pint_radsec_server" {
-		eku = x509.ExtKeyUsageServerAuth
-	}
-
 	validity := 5 * 365 * 24 * time.Hour
-	if profileID == "pint_radsec_server" {
+	if profileID == profileRadSecServer {
+		eku = x509.ExtKeyUsageServerAuth
 		validity = 90 * 24 * time.Hour
 	}
 
 	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano()),
+		SerialNumber: big.NewInt(serialCounter.Add(1)),
 		Subject:      csr.Subject,
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(validity),

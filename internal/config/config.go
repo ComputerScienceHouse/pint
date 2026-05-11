@@ -91,27 +91,21 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// principalFromDN extracts the Kerberos principal from a FreeIPA service
-// account bind DN of the form:
-//
-//	krbprincipalname=pint/host@REALM,cn=services,...
+// principalFromDN parses krbprincipalname=pint/host@REALM,cn=services,...
+// and returns the principal value (e.g. "pint/host@REALM").
 func principalFromDN(dn string) string {
 	first := strings.SplitN(dn, ",", 2)[0]
 	parts := strings.SplitN(first, "=", 2)
 	if len(parts) != 2 {
 		return dn
 	}
-	return parts[1] // e.g. "pint/host@REALM"
+	return parts[1]
 }
 
-// hostnameFromPrincipal extracts the hostname from a service principal of the
-// form service/hostname@REALM, returning just "hostname".
 func hostnameFromPrincipal(principal string) string {
-	// strip @REALM
 	if i := strings.LastIndex(principal, "@"); i != -1 {
 		principal = principal[:i]
 	}
-	// strip "service/"
 	if i := strings.Index(principal, "/"); i != -1 {
 		return principal[i+1:]
 	}

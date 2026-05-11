@@ -36,8 +36,7 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		client := store.FindByUsername(nav.Username)
-		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, client, caChainPEM, "", ""))
+		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, store.FindByUsername(nav.Username), caChainPEM, "", ""))
 	}
 }
 
@@ -45,11 +44,7 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM 
 // Renders the page directly with the one-time key and cert PEM.
 func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		nav, ok := getNavInfo(c)
-		if !ok {
-			c.Redirect(http.StatusFound, "/auth/login")
-			return
-		}
+		nav, _ := getNavInfo(c)
 
 		ipCIDR := c.PostForm("ip_cidr")
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
@@ -68,16 +63,8 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if err := store.Save(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
 			return
-		}
-		if err := radius.WriteRadiusConfig(c.Request.Context(), k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := radius.Reload(c.Request.Context(), k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
-			c.Header("X-Reload-Warning", err.Error())
 		}
 
 		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, entry, caChainPEM, keyPEM, certPEM))
@@ -88,11 +75,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 // Revokes the existing cert, issues new credentials, and renders once with the new key/cert PEM.
 func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		nav, ok := getNavInfo(c)
-		if !ok {
-			c.Redirect(http.StatusFound, "/auth/login")
-			return
-		}
+		nav, _ := getNavInfo(c)
 
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
@@ -100,7 +83,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 			return
 		}
 		existing := store.FindByUsername(nav.Username)
-		revokeExistingCert(ipaClient, existing, cfg.RadSecCAName, 4) // 4 = superseded
+		revokeExistingCert(ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
 
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
 		if err != nil {
@@ -112,16 +95,8 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if err := store.Save(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
 			return
-		}
-		if err := radius.WriteRadiusConfig(c.Request.Context(), k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := radius.Reload(c.Request.Context(), k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
-			c.Header("X-Reload-Warning", err.Error())
 		}
 
 		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, entry, caChainPEM, keyPEM, certPEM))
@@ -131,11 +106,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 // UpdateIPHandler serves POST /radius/update-ip — changes source IP/CIDR only.
 func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username, ok := getUsername(c)
-		if !ok {
-			c.Redirect(http.StatusFound, "/auth/login")
-			return
-		}
+		username, _ := getUsername(c)
 
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
@@ -157,16 +128,8 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest
 		}
 		store.Upsert(updated)
 
-		if err := store.Save(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
 			return
-		}
-		if err := radius.WriteRadiusConfig(c.Request.Context(), k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := radius.Reload(c.Request.Context(), k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
-			c.Header("X-Reload-Warning", err.Error())
 		}
 
 		c.Redirect(http.StatusFound, "/radius")
@@ -176,31 +139,18 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest
 // DeleteSecretHandler serves POST /radius/delete — revokes cert and removes config.
 func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, ipaClient *freeipa.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username, ok := getUsername(c)
-		if !ok {
-			c.Redirect(http.StatusFound, "/auth/login")
-			return
-		}
+		username, _ := getUsername(c)
 
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		existing := store.FindByUsername(username)
-		revokeExistingCert(ipaClient, existing, cfg.RadSecCAName, 5) // 5 = cessationOfOperation
+		revokeExistingCert(ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
 		store.Delete(username)
 
-		if err := store.Save(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
 			return
-		}
-		if err := radius.WriteRadiusConfig(c.Request.Context(), k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if err := radius.Reload(c.Request.Context(), k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
-			c.Header("X-Reload-Warning", err.Error())
 		}
 
 		c.Redirect(http.StatusFound, "/radius")
@@ -218,20 +168,34 @@ func RadSecCAHandler(caChainPEM string) gin.HandlerFunc {
 // radiusPageData builds the template context for the radius page.
 // keyPEM and certPEM are non-empty only immediately after credential generation.
 func radiusPageData(nav navInfo, radiusServer string, client *radius.RadiusClient, caPEM, keyPEM, certPEM string) gin.H {
-	data := gin.H{
-		"Username":     nav.Username,
-		"FullName":     nav.FullName,
-		"AvatarURL":    nav.AvatarURL,
-		"RadiusServer": radiusServer,
-		"Client":       client,
-		"CACertPEM":    caPEM,
-		"KeyPEM":       keyPEM,
-		"CertPEM":      certPEM,
-	}
+	data := nav.toMap()
+	data["RadiusServer"] = radiusServer
+	data["Client"] = client
+	data["CACertPEM"] = caPEM
+	data["KeyPEM"] = keyPEM
+	data["CertPEM"] = certPEM
 	if client != nil && client.IPCIDR != nil {
 		data["IPCIDR"] = *client.IPCIDR
 	}
 	return data
+}
+
+// commitStore saves the store, writes the RADIUS config, and reloads FreeRADIUS.
+// Reload errors are non-fatal and set as X-Reload-Warning. Returns true on success.
+func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Interface, restCfg *rest.Config, cfg *config.Config) error {
+	ctx := c.Request.Context()
+	if err := store.Save(ctx); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return err
+	}
+	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return err
+	}
+	if err := radius.Reload(ctx, k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
+		c.Header("X-Reload-Warning", err.Error())
+	}
+	return nil
 }
 
 // issueClientCredentials generates a new shared secret, RSA key, and RadSec client cert.

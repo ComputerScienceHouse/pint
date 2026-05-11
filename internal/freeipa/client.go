@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,24 +15,40 @@ import (
 	"sync"
 )
 
+// RFC 5280 certificate revocation reason codes.
+const (
+	RevocationReasonSuperseded          = 4
+	RevocationReasonCessationOfOperation = 5
+)
+
+var errUnauthorized = errors.New("freeipa: 401 unauthorized")
+
 type Client struct {
 	host       string
+	referer    string
 	user       string
 	pass       string
 	httpClient *http.Client
 	mu         sync.Mutex
 	session    string
+	relogging  bool
 }
 
 func New(host, user, pass string, skipTLS bool) *Client {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: skipTLS}, //nolint:gosec
 	}
-	return &Client{host: host, user: user, pass: pass, httpClient: &http.Client{Transport: transport}}
+	return &Client{
+		host:       host,
+		referer:    "https://" + host + "/ipa",
+		user:       user,
+		pass:       pass,
+		httpClient: &http.Client{Transport: transport},
+	}
 }
 
 func NewWithHTTPClient(host, user, pass string, httpClient *http.Client) *Client {
-	return &Client{host: host, user: user, pass: pass, httpClient: httpClient}
+	return &Client{host: host, referer: "https://" + host + "/ipa", user: user, pass: pass, httpClient: httpClient}
 }
 
 func (c *Client) Login() error {
@@ -44,7 +61,7 @@ func (c *Client) Login() error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Referer", fmt.Sprintf("https://%s/ipa", c.host))
+	req.Header.Set("Referer", c.referer)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -114,9 +131,20 @@ func (c *Client) CertRevoke(serial int64, caName string, reason int) error {
 
 func (c *Client) rpc(method string, args []interface{}, kwargs map[string]interface{}) (json.RawMessage, error) {
 	result, err := c.doRPC(method, args, kwargs)
-	if err != nil && strings.Contains(err.Error(), "401") {
-		if loginErr := c.Login(); loginErr != nil {
-			return nil, loginErr
+	if err != nil && errors.Is(err, errUnauthorized) {
+		c.mu.Lock()
+		if !c.relogging {
+			c.relogging = true
+			c.mu.Unlock()
+			loginErr := c.Login()
+			c.mu.Lock()
+			c.relogging = false
+			c.mu.Unlock()
+			if loginErr != nil {
+				return nil, loginErr
+			}
+		} else {
+			c.mu.Unlock()
 		}
 		return c.doRPC(method, args, kwargs)
 	}
@@ -141,7 +169,7 @@ func (c *Client) doRPC(method string, args []interface{}, kwargs map[string]inte
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Referer", fmt.Sprintf("https://%s/ipa", c.host))
+	req.Header.Set("Referer", c.referer)
 	c.mu.Lock()
 	session := c.session
 	c.mu.Unlock()
@@ -154,7 +182,7 @@ func (c *Client) doRPC(method string, args []interface{}, kwargs map[string]inte
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return nil, fmt.Errorf("401 unauthorized")
+		return nil, errUnauthorized
 	}
 
 	var rpcResp rpcResponse

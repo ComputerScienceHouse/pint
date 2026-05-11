@@ -16,12 +16,9 @@ import (
 func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
-		c.HTML(http.StatusOK, "profile.html", gin.H{
-			"Username":  nav.Username,
-			"FullName":  nav.FullName,
-			"AvatarURL": nav.AvatarURL,
-			"SSID":      cfg.WiFiSSID,
-		})
+		data := nav.toMap()
+		data["SSID"] = cfg.WiFiSSID
+		c.HTML(http.StatusOK, "profile.html", data)
 	}
 }
 

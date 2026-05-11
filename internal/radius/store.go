@@ -26,7 +26,6 @@ type RadiusClient struct {
 	CertEKUs      []string `json:"cert_ekus,omitempty"`
 }
 
-
 // ClientStore is a Kubernetes-Secret-backed list of RadiusClient entries.
 type ClientStore struct {
 	k8s        kubernetes.Interface
@@ -66,17 +65,10 @@ func (s *ClientStore) Save(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	secret := &corev1.Secret{
+	return upsertSecret(ctx, s.k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: s.secretName, Namespace: s.namespace},
 		Data:       map[string][]byte{"clients.json": data},
-	}
-	_, getErr := s.k8s.CoreV1().Secrets(s.namespace).Get(ctx, s.secretName, metav1.GetOptions{})
-	if errors.IsNotFound(getErr) {
-		_, err = s.k8s.CoreV1().Secrets(s.namespace).Create(ctx, secret, metav1.CreateOptions{})
-	} else {
-		_, err = s.k8s.CoreV1().Secrets(s.namespace).Update(ctx, secret, metav1.UpdateOptions{})
-	}
-	return err
+	})
 }
 
 // Upsert inserts or replaces the entry for client.Username.

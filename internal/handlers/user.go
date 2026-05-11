@@ -17,6 +17,14 @@ type navInfo struct {
 	AvatarURL string
 }
 
+func (n navInfo) toMap() gin.H {
+	return gin.H{
+		"Username":  n.Username,
+		"FullName":  n.FullName,
+		"AvatarURL": n.AvatarURL,
+	}
+}
+
 // getNavInfo extracts user identity from the csh-auth v2 middleware context.
 func getNavInfo(c *gin.Context) (navInfo, bool) {
 	raw, exists := c.Get(cshauth.ContextKey)

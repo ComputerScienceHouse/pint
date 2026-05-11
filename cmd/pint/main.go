@@ -3,19 +3,18 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
+	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
@@ -33,16 +32,11 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	// FreeIPA client — authenticate and fetch WiFi CA cert at startup
+	// FreeIPA client — authenticate at startup
 	ipaClient := freeipa.New(cfg.IPAHost, cfg.IPAPrincipal, cfg.IPAPassword, cfg.IPASkipTLSVerify)
 	if err := ipaClient.Login(); err != nil {
 		log.Fatalf("freeipa login: %v", err)
 	}
-	caDER, err := ipaClient.CAShow(cfg.IPACAName)
-	if err != nil {
-		log.Fatalf("freeipa ca_show: %v", err)
-	}
-	log.Printf("fetched WiFi CA cert (%d bytes) from FreeIPA", len(caDER))
 
 	// Kubernetes client — try in-cluster first, fall back to kubeconfig
 	restCfg, err := rest.InClusterConfig()
@@ -58,18 +52,29 @@ func main() {
 		log.Fatalf("kubernetes client: %v", err)
 	}
 
-	// RadSec CA chain: intermediate + root
-	radSecCACertDER, err := ipaClient.CAShow(cfg.RadSecCAName)
-	if err != nil {
-		log.Fatalf("freeipa ca_show radsec: %v", err)
+	// Fetch all three CA certs and the RadSec server cert in parallel.
+	var (
+		caDER           []byte
+		radSecCACertDER []byte
+		rootCACertDER   []byte
+		certErr         [4]error
+	)
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() { defer wg.Done(); caDER, certErr[0] = ipaClient.CAShow(cfg.IPACAName) }()
+	go func() { defer wg.Done(); radSecCACertDER, certErr[1] = ipaClient.CAShow(cfg.RadSecCAName) }()
+	go func() { defer wg.Done(); rootCACertDER, certErr[2] = ipaClient.CAShow(cfg.RootCAName) }()
+	wg.Wait()
+	for i, e := range certErr[:3] {
+		if e != nil {
+			log.Fatalf("freeipa ca_show[%d]: %v", i, e)
+		}
 	}
-	rootCACertDER, err := ipaClient.CAShow(cfg.RootCAName)
-	if err != nil {
-		log.Fatalf("freeipa ca_show root: %v", err)
-	}
+	log.Printf("fetched WiFi CA (%d bytes), RadSec CA (%d bytes), root CA (%d bytes)",
+		len(caDER), len(radSecCACertDER), len(rootCACertDER))
+
 	radSecCAChainPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: radSecCACertDER})) +
 		string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootCACertDER}))
-	log.Printf("fetched RadSec CA chain (%d + %d bytes) from FreeIPA", len(radSecCACertDER), len(rootCACertDER))
 
 	// Load or renew FreeRADIUS server TLS cert
 	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), k8sClient, ipaClient, cfg); err != nil {
@@ -96,7 +101,7 @@ func main() {
 	r.HTMLRender = buildTemplates()
 
 	// Public routes
-	r.GET("/", handlers.IndexHandler(cfg))
+	r.GET("/", handlers.IndexHandler())
 	r.GET("/auth/login", auth.HandleLogin)
 	r.GET("/auth/callback", auth.HandleCallback)
 	r.GET("/auth/logout", auth.HandleLogout)
@@ -106,7 +111,7 @@ func main() {
 	protected.Use(auth.CookieMiddleware())
 	protected.Use(handlers.RequireAuth(cfg.LoginURL))
 	{
-		protected.GET("/dashboard", handlers.DashboardHandler(cfg))
+		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
 		protected.POST("/profile/generate", handlers.GenerateProfileHandler(ipaClient, cfg, caDER))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
@@ -154,16 +159,10 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 	}
 
 	// Generate new cert via FreeIPA
-	privKey, genErr := rsa.GenerateKey(rand.Reader, 2048)
+	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
 	if genErr != nil {
-		return nil, nil, false, fmt.Errorf("generate radsec key: %w", genErr)
+		return nil, nil, false, fmt.Errorf("generate radsec key/csr: %w", genErr)
 	}
-	tmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: cfg.IPAServiceHostname}}
-	csrDER, csrErr := x509.CreateCertificateRequest(rand.Reader, tmpl, privKey)
-	if csrErr != nil {
-		return nil, nil, false, fmt.Errorf("create radsec csr: %w", csrErr)
-	}
-	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
 	certDER, certErr := ipaClient.CertRequest(cfg.IPAPrincipal, string(csrPEM), cfg.RadSecCAName, cfg.RadSecServerCertProfile)
 	if certErr != nil {
