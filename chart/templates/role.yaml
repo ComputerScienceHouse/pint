@@ -8,11 +8,14 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
     resourceNames:
       - {{ .Values.secrets.radiusClients | quote }}
       - {{ .Values.secrets.radiusConfig | quote }}
       - {{ .Values.secrets.radSecCert | quote }}
-    verbs: ["get", "create", "update"]
+    verbs: ["get", "update"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["list"]
