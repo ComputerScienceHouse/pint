@@ -1,0 +1,16 @@
+# Local kind cluster overrides.
+# Apply with: helm upgrade --install pint chart/ -f chart/values-dev.yaml -n pint --create-namespace
+
+# Run PINT as a local process (make dev) rather than in the cluster.
+pint:
+  enabled: false
+
+freeradius:
+  image:
+    tag: dev
+    pullPolicy: Never
+  service:
+    type: NodePort
+    nodePort: 32083
+  # kind has no SCC restrictions; default permissions are fine.
+  securityContext: {}

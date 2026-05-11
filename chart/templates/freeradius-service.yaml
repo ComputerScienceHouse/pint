@@ -1,0 +1,20 @@
+{{- if .Values.freeradius.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pint.freeradiusFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.freeradiusLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.freeradius.service.type }}
+  selector:
+    {{- include "pint.freeradiusSelectorLabels" . | nindent 4 }}
+  ports:
+    - port: {{ .Values.freeradius.service.port }}
+      targetPort: radsec
+      name: radsec
+      {{- if and (eq .Values.freeradius.service.type "NodePort") .Values.freeradius.service.nodePort }}
+      nodePort: {{ .Values.freeradius.service.nodePort }}
+      {{- end }}
+{{- end }}

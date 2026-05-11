@@ -1,0 +1,53 @@
+{{- if .Values.pint.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pint.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.pint.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pint.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pint.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "pint.serviceAccountName" . }}
+      containers:
+        - name: pint
+          image: {{ include "pint.image" . }}
+          imagePullPolicy: {{ .Values.pint.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envSecret }}
+          env:
+            # Non-sensitive deployment config injected by the chart so it stays
+            # consistent with the Role resourceNames and FreeRADIUS volume mounts.
+            - name: PINT_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PINT_RADIUS_CLIENTS_SECRET
+              value: {{ .Values.secrets.radiusClients | quote }}
+            - name: PINT_RADIUS_CONFIG_SECRET
+              value: {{ .Values.secrets.radiusConfig | quote }}
+            - name: PINT_RADSEC_CERT_SECRET
+              value: {{ .Values.secrets.radSecCert | quote }}
+            {{- if .Values.freeradius.enabled }}
+            - name: PINT_FREERADIUS_POD_SELECTOR
+              value: {{ include "pint.freeradiusPodSelector" . | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+{{- end }}

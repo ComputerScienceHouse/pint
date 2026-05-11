@@ -1,0 +1,68 @@
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  name: ""  # defaults to fullname
+
+# PINT web application.
+# Set enabled=false in dev to run PINT as a local process (make dev) instead.
+pint:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: pint
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+
+# Pre-existing Secret containing sensitive PINT environment variables.
+# Required when pint.enabled=true.  Must contain:
+#   PINT_CLIENT_ID, PINT_CLIENT_SECRET, PINT_SERVER_URL,
+#   PINT_LOGIN_URL, PINT_CALLBACK_URL,
+#   PINT_IPA_HOST, PINT_IPA_SERVICE_ACCOUNT, PINT_IPA_PASSWORD,
+#   PINT_IPA_CA_NAME, PINT_IPA_RADSEC_CA_NAME, PINT_IPA_ROOT_CA_NAME,
+#   PINT_WIFI_SSID, PINT_RADIUS_SERVER
+# Non-sensitive config (namespace, secret names, pod selector) is injected
+# directly by the chart and does not need to be in this Secret.
+envSecret: pint-env
+
+# Names of the K8s Secrets PINT creates and manages at runtime.
+# These are referenced consistently across the Role, PINT env vars, and
+# FreeRADIUS volume mounts — change all three if you rename them.
+secrets:
+  radiusClients: pint-radius-clients
+  radiusConfig:  pint-radius-config
+  radSecCert:    pint-radsec-server
+
+service:
+  type: ClusterIP
+  port: 80
+
+# FreeRADIUS — RadSec server mounted by home routers.
+freeradius:
+  enabled: true
+  image:
+    repository: pint-freeradius
+    tag: ""  # defaults to Chart.appVersion
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    port: 2083
+    nodePort: null  # only used when type=NodePort
+  # Run as the freerad user (UID 101); Secret defaultMode 0444 ensures cert
+  # files are readable without root.  Override to {} for environments without
+  # pod security enforcement (e.g. local kind).
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+
+# OpenShift-specific resources.
+openshift:
+  enabled: false
+  route:
+    host: ""  # leave blank for an auto-assigned hostname
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect

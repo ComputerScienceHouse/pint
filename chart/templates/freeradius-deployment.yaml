@@ -1,0 +1,51 @@
+{{- if .Values.freeradius.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pint.freeradiusFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.freeradiusLabels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "pint.freeradiusSelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pint.freeradiusLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: freeradius
+          image: {{ include "pint.freeradiusImage" . }}
+          imagePullPolicy: {{ .Values.freeradius.image.pullPolicy }}
+          ports:
+            - containerPort: 2083
+              name: radsec
+          {{- with .Values.freeradius.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # Full-directory mount (not subPath) so K8s auto-syncs clients.conf
+            # when the Secret changes; FreeRADIUS picks it up on the next SIGHUP.
+            - name: dynamic-clients
+              mountPath: /etc/freeradius/dynamic
+              readOnly: true
+            # All TLS material written by PINT: server cert+key, RadSec CA,
+            # WiFi CA.  0444 so the freerad user can read without root.
+            - name: radsec-certs
+              mountPath: /run/secrets/radsec-server
+              readOnly: true
+      volumes:
+        - name: dynamic-clients
+          secret:
+            secretName: {{ .Values.secrets.radiusConfig }}
+            optional: true
+        - name: radsec-certs
+          secret:
+            secretName: {{ .Values.secrets.radSecCert }}
+            optional: true
+            defaultMode: 0444
+{{- end }}

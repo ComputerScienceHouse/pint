@@ -1,0 +1,37 @@
+PINT deployed to namespace: {{ .Release.Namespace }}
+
+{{- if .Values.pint.enabled }}
+
+  PINT web UI:
+  {{- if .Values.openshift.enabled }}
+  {{- if .Values.openshift.route.host }}
+    https://{{ .Values.openshift.route.host }}
+  {{- else }}
+    oc get route {{ include "pint.fullname" . }} -n {{ .Release.Namespace }}
+  {{- end }}
+  {{- else }}
+    kubectl port-forward -n {{ .Release.Namespace }} service/{{ include "pint.fullname" . }} 8080:80
+    open http://localhost:8080
+  {{- end }}
+{{- else }}
+  PINT is running as a local process (pint.enabled=false).
+  Start it with:  make dev
+{{- end }}
+
+{{- if .Values.freeradius.enabled }}
+
+  FreeRADIUS (RadSec, port 2083):
+  {{- if eq .Values.freeradius.service.type "NodePort" }}
+    Reachable at localhost:{{ .Values.freeradius.service.nodePort }}
+    Stream logs:  make dev-logs
+  {{- else if eq .Values.freeradius.service.type "LoadBalancer" }}
+    kubectl get service {{ include "pint.freeradiusFullname" . }} -n {{ .Release.Namespace }}
+  {{- end }}
+{{- end }}
+
+{{- if .Values.pint.enabled }}
+
+  Before PINT can start, create the {{ .Values.envSecret }} Secret:
+    kubectl create secret generic {{ .Values.envSecret }} -n {{ .Release.Namespace }} \
+      --from-env-file=.env.dev   # or your production env file
+{{- end }}
