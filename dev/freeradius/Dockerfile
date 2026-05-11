@@ -1,4 +1,4 @@
-FROM freeradius/freeradius-server:3.2
+FROM freeradius/freeradius-server:latest-3.2-alpine
 
 # Remove default virtual servers (require local passwd/unix user databases)
 # and the bundled EAP module (uses self-signed throwaway certs).
