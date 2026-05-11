@@ -2,3 +2,5 @@
 /freeipa-stub
 .env.dev
 dev/freeipa-stub/data/
+.claude/
+docs/
