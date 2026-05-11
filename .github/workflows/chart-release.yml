@@ -1,0 +1,55 @@
+name: Publish Helm Chart
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - chart/**
+      - .github/workflows/chart-release.yml
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+
+      - name: Lint (default values)
+        run: helm lint chart/
+
+      - name: Lint (dev values)
+        run: helm lint chart/ -f chart/values-dev.yaml
+
+  release:
+    name: Release
+    needs: lint
+    # Only publish on pushes to main, not on PRs.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # create GitHub Releases and push to gh-pages
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # chart-releaser needs full history to diff versions
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - uses: azure/setup-helm@v4
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.6.0
+        with:
+          # chart/ lives at the repo root, so charts_dir=. lets cr find it
+          # via ./*/Chart.yaml without touching Go source directories.
+          charts_dir: .
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
