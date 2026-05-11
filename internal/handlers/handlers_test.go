@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/gin-contrib/multitemplate"
@@ -35,12 +34,6 @@ func testAuth(username string) gin.HandlerFunc {
 	}
 }
 
-func minimalConfig() *config.Config {
-	return &config.Config{
-		WiFiSSID:     "TestNet",
-		RadiusServer: "radius.example.com:2083",
-	}
-}
 
 func TestIndexHandler(t *testing.T) {
 	r := gin.New()

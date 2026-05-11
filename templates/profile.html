@@ -42,7 +42,10 @@ function downloadProfile(platform) {
     btn.disabled = true;
     spinner.style.display = 'inline';
 
-    fetch('/profile/generate?platform=' + platform, {method: 'POST'})
+    fetch('/profile/generate?platform=' + platform, {
+            method: 'POST',
+            headers: {'X-CSRF-Token': '{{.CSRFToken}}'},
+        })
         .then(r => {
             if (!r.ok) throw new Error('Generation failed: ' + r.status);
             const cd = r.headers.get('Content-Disposition') || '';

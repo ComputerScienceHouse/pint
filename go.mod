@@ -6,6 +6,7 @@ replace github.com/computersciencehouse/csh-auth/v2 => ../csh-auth
 
 require (
 	github.com/computersciencehouse/csh-auth/v2 v2.0.0
+	github.com/gin-contrib/multitemplate v1.1.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
 	howett.net/plist v1.0.1
@@ -25,7 +26,6 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
-	github.com/gin-contrib/multitemplate v1.1.2 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect

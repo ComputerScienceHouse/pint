@@ -156,6 +156,7 @@
         </button>
       </div>
       <form method="POST" action="/radius/update-ip">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
           <p class="text-muted">Set the IP address or CIDR your router connects from. Leave blank to allow from any IP.</p>
           <div class="form-group mb-0">
@@ -185,6 +186,7 @@
         </button>
       </div>
       <form method="POST" action="/radius/regenerate">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
           <p>This will <strong>revoke your current certificate</strong> and generate a new shared secret, private key, and certificate.</p>
           <p class="text-warning mb-0"><strong>Your router will lose access to CSH WiFi until you update it with the new credentials.</strong> Your source IP setting will be preserved.</p>
@@ -209,6 +211,7 @@
         </button>
       </div>
       <form method="POST" action="/radius/delete">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
           <p>This will <strong>revoke your certificate</strong> and remove your RADIUS configuration.</p>
           <p class="text-danger mb-0"><strong>Your home router will immediately stop accepting CSH WiFi logins.</strong> You can re-enroll at any time by returning to this page.</p>
@@ -237,6 +240,7 @@
     </dl>
     <p>Broadcast the CSH WiFi SSID from your home router. PINT will generate a shared secret, private key, and client certificate so your router can authenticate users against the CSH RADIUS server.</p>
     <form method="POST" action="/radius/secret">
+      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <div class="form-group">
         <label for="ip_cidr">Source IP / CIDR <span class="text-muted">(recommended)</span></label>
         <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"

@@ -18,6 +18,7 @@ func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 		nav, _ := getNavInfo(c)
 		data := nav.toMap()
 		data["SSID"] = cfg.WiFiSSID
+		data["CSRFToken"] = c.GetString(csrfContextKey)
 		c.HTML(http.StatusOK, "profile.html", data)
 	}
 }

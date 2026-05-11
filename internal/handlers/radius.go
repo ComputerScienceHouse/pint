@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"log"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -22,8 +23,8 @@ import (
 )
 
 var ekuNames = map[x509.ExtKeyUsage]string{
-	x509.ExtKeyUsageClientAuth: "TLS Web Client Authentication",
-	x509.ExtKeyUsageServerAuth: "TLS Web Server Authentication",
+	x509.ExtKeyUsageClientAuth:      "TLS Web Client Authentication",
+	x509.ExtKeyUsageServerAuth:      "TLS Web Server Authentication",
 	x509.ExtKeyUsageEmailProtection: "Email Protection",
 }
 
@@ -36,7 +37,7 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, store.FindByUsername(nav.Username), caChainPEM, "", ""))
+		c.HTML(http.StatusOK, "radius.html", radiusPageData(c, nav, cfg.RadiusServer, store.FindByUsername(nav.Username), caChainPEM, "", ""))
 	}
 }
 
@@ -46,7 +47,10 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
-		ipCIDR := c.PostForm("ip_cidr")
+		ipCIDR, ok := parseIPCIDR(c)
+		if !ok {
+			return
+		}
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -67,7 +71,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 			return
 		}
 
-		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, entry, caChainPEM, keyPEM, certPEM))
+		c.HTML(http.StatusOK, "radius.html", radiusPageData(c, nav, cfg.RadiusServer, entry, caChainPEM, keyPEM, certPEM))
 	}
 }
 
@@ -99,7 +103,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 			return
 		}
 
-		c.HTML(http.StatusOK, "radius.html", radiusPageData(nav, cfg.RadiusServer, entry, caChainPEM, keyPEM, certPEM))
+		c.HTML(http.StatusOK, "radius.html", radiusPageData(c, nav, cfg.RadiusServer, entry, caChainPEM, keyPEM, certPEM))
 	}
 }
 
@@ -119,7 +123,10 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest
 			return
 		}
 
-		ipCIDR := c.PostForm("ip_cidr")
+		ipCIDR, ok := parseIPCIDR(c)
+		if !ok {
+			return
+		}
 		updated := *existing
 		if ipCIDR != "" {
 			updated.IPCIDR = &ipCIDR
@@ -167,8 +174,9 @@ func RadSecCAHandler(caChainPEM string) gin.HandlerFunc {
 
 // radiusPageData builds the template context for the radius page.
 // keyPEM and certPEM are non-empty only immediately after credential generation.
-func radiusPageData(nav navInfo, radiusServer string, client *radius.RadiusClient, caPEM, keyPEM, certPEM string) gin.H {
+func radiusPageData(c *gin.Context, nav navInfo, radiusServer string, client *radius.RadiusClient, caPEM, keyPEM, certPEM string) gin.H {
 	data := nav.toMap()
+	data["CSRFToken"] = c.GetString(csrfContextKey)
 	data["RadiusServer"] = radiusServer
 	data["Client"] = client
 	data["CACertPEM"] = caPEM
@@ -277,4 +285,22 @@ func generateSecret() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// parseIPCIDR reads ip_cidr from the POST form, validates it, and returns it.
+// An empty value is allowed (means "any IP"). Returns ("", false) and writes a
+// 400 response if the value is present but not a valid CIDR prefix or bare IP.
+func parseIPCIDR(c *gin.Context) (string, bool) {
+	raw := c.PostForm("ip_cidr")
+	if raw == "" {
+		return "", true
+	}
+	// Accept either a CIDR prefix (1.2.3.0/24) or a bare IP (1.2.3.4).
+	if _, err := netip.ParsePrefix(raw); err != nil {
+		if _, err2 := netip.ParseAddr(raw); err2 != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ip_cidr must be a valid IP address or CIDR prefix"})
+			return "", false
+		}
+	}
+	return raw, true
 }

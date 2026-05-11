@@ -29,9 +29,9 @@ type Client struct {
 	user       string
 	pass       string
 	httpClient *http.Client
-	mu         sync.Mutex
+	mu         sync.Mutex // guards session
+	reloginMu  sync.Mutex // serializes re-login attempts
 	session    string
-	relogging  bool
 }
 
 func New(host, user, pass string, skipTLS bool) *Client {
@@ -131,24 +131,18 @@ func (c *Client) CertRevoke(serial int64, caName string, reason int) error {
 
 func (c *Client) rpc(method string, args []interface{}, kwargs map[string]interface{}) (json.RawMessage, error) {
 	result, err := c.doRPC(method, args, kwargs)
-	if err != nil && errors.Is(err, errUnauthorized) {
-		c.mu.Lock()
-		if !c.relogging {
-			c.relogging = true
-			c.mu.Unlock()
-			loginErr := c.Login()
-			c.mu.Lock()
-			c.relogging = false
-			c.mu.Unlock()
-			if loginErr != nil {
-				return nil, loginErr
-			}
-		} else {
-			c.mu.Unlock()
-		}
-		return c.doRPC(method, args, kwargs)
+	if err == nil || !errors.Is(err, errUnauthorized) {
+		return result, err
 	}
-	return result, err
+	// Serialize re-logins: only one goroutine re-authenticates at a time.
+	// Others wait at reloginMu and retry with the refreshed session afterward.
+	c.reloginMu.Lock()
+	loginErr := c.Login()
+	c.reloginMu.Unlock()
+	if loginErr != nil {
+		return nil, loginErr
+	}
+	return c.doRPC(method, args, kwargs)
 }
 
 func (c *Client) doRPC(method string, args []interface{}, kwargs map[string]interface{}) (json.RawMessage, error) {

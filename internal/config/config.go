@@ -15,28 +15,28 @@ type Config struct {
 	CallbackURL  string
 
 	// FreeIPA
-	IPAHost              string
-	IPAServiceAccount    string
-	IPAPassword          string
-	IPACAName            string
-	RadSecCAName         string // PINT_IPA_RADSEC_CA_NAME — FreeIPA intermediate CA for RadSec certs
-	RootCAName           string // PINT_IPA_ROOT_CA_NAME — signing root CA; defaults to "ipa"
+	IPAHost                 string
+	IPAServiceAccount       string
+	IPAPassword             string
+	IPACAName               string
+	RadSecCAName            string // PINT_IPA_RADSEC_CA_NAME — FreeIPA intermediate CA for RadSec certs
+	RootCAName              string // PINT_IPA_ROOT_CA_NAME — signing root CA; defaults to "ipa"
 	IPACertProfile          string // PINT_IPA_CERT_PROFILE — FreeIPA profile for WiFi client certs (optional)
 	RadSecClientCertProfile string // PINT_IPA_RADSEC_CLIENT_CERT_PROFILE — FreeIPA profile for RadSec router client certs (optional)
 	RadSecServerCertProfile string // PINT_IPA_RADSEC_SERVER_CERT_PROFILE — FreeIPA profile for FreeRADIUS server cert (optional)
-	IPAPrincipal         string // derived: full principal, e.g. pint/host@REALM
-	IPAServiceHostname   string // derived: hostname portion of principal, e.g. host
-	IPASkipTLSVerify     bool
+	IPAPrincipal            string // derived: full principal, e.g. pint/host@REALM
+	IPAServiceHostname      string // derived: hostname portion of principal, e.g. host
+	IPASkipTLSVerify        bool
 
 	// WiFi
 	WiFiSSID string
 
 	// Kubernetes
-	Namespace              string
-	RadiusClientsSecret    string
-	RadiusConfigSecret     string
-	RadSecCertSecret       string // PINT_RADSEC_CERT_SECRET — K8s Secret storing FreeRADIUS TLS cert+key
-	FreeRADIUSPodSelector  string
+	Namespace             string
+	RadiusClientsSecret   string
+	RadiusConfigSecret    string
+	RadSecCertSecret      string // PINT_RADSEC_CERT_SECRET — K8s Secret storing FreeRADIUS TLS cert+key
+	FreeRADIUSPodSelector string
 
 	// UI
 	RadiusServer string

@@ -57,7 +57,7 @@ func main() {
 		caDER           []byte
 		radSecCACertDER []byte
 		rootCACertDER   []byte
-		certErr         [4]error
+		certErr         [3]error
 	)
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -65,7 +65,7 @@ func main() {
 	go func() { defer wg.Done(); radSecCACertDER, certErr[1] = ipaClient.CAShow(cfg.RadSecCAName) }()
 	go func() { defer wg.Done(); rootCACertDER, certErr[2] = ipaClient.CAShow(cfg.RootCAName) }()
 	wg.Wait()
-	for i, e := range certErr[:3] {
+	for i, e := range certErr {
 		if e != nil {
 			log.Fatalf("freeipa ca_show[%d]: %v", i, e)
 		}
@@ -110,6 +110,7 @@ func main() {
 	protected := r.Group("/")
 	protected.Use(auth.CookieMiddleware())
 	protected.Use(handlers.RequireAuth(cfg.LoginURL))
+	protected.Use(handlers.CSRFMiddleware())
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))

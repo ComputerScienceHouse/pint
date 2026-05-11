@@ -53,8 +53,15 @@ func (s *ClientStore) Load(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
+	// Try bare array (current format) first; fall back to legacy wrapped object.
 	if err := json.Unmarshal(data, &s.clients); err != nil {
-		return fmt.Errorf("unmarshal clients.json: %w", err)
+		var legacy struct {
+			Clients []RadiusClient `json:"clients"`
+		}
+		if err2 := json.Unmarshal(data, &legacy); err2 != nil {
+			return fmt.Errorf("unmarshal clients.json: %w", err)
+		}
+		s.clients = legacy.Clients
 	}
 	return nil
 }
