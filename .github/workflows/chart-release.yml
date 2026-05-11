@@ -2,7 +2,10 @@ name: Publish Helm Chart
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+    paths:
+      - chart/**
+      - .github/workflows/chart-release.yml
   pull_request:
     paths:
       - chart/**
@@ -26,8 +29,7 @@ jobs:
   release:
     name: Release
     needs: lint
-    # Only publish on pushes to main, not on PRs.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write  # create GitHub Releases and push to gh-pages
@@ -44,6 +46,12 @@ jobs:
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
 
       - uses: azure/setup-helm@v5
+
+      - name: Stamp dev pre-release version
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          current=$(grep '^version:' chart/Chart.yaml | awk '{print $2}')
+          sed -i "s/^version:.*/version: ${current}-dev.${{ github.run_number }}/" chart/Chart.yaml
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.7.0
