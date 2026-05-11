@@ -76,7 +76,7 @@ func main() {
 
 // loadOrInitCAs loads persisted CA state from dir, or generates a fresh root +
 // two intermediates and persists them. The wifiCAName and radSecCAName are the
-// FreeIPA CA names PINT will use — they must match PINT_IPA_CA_NAME and
+// FreeIPA CA names PINT will use; they must match PINT_IPA_CA_NAME and
 // PINT_IPA_RADSEC_CA_NAME in .env.dev.
 func loadOrInitCAs(dir, wifiCAName, radSecCAName, rootCAName string) (map[string]*caEntry, error) {
 	root, err := loadOrCreateCA(dir, "root", "PINT Dev Root CA", nil)
@@ -281,7 +281,7 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 		}))
 
 	case "cert_revoke":
-		log.Printf("cert_revoke: stub — no-op")
+		log.Printf("cert_revoke: stub, no-op")
 		json.NewEncoder(w).Encode(rpcOK(map[string]interface{}{"result": true}))
 
 	default:

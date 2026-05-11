@@ -82,4 +82,4 @@ PINT_IPA_RADSEC_CLIENT_CERT_PROFILE=pint_radsec_client
 PINT_IPA_RADSEC_SERVER_CERT_PROFILE=pint_radsec_server
 ```
 
-All three are optional — omitting them causes PINT to request certificates without specifying a profile, which uses the CA's default.
+All three are optional; omitting them causes PINT to request certificates without specifying a profile, which uses the CA's default.

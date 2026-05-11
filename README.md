@@ -1,4 +1,4 @@
-# PINT — Pouring IPA for Network Trust
+# PINT - Pouring IPA for Network Trust
 
 PINT is a self-service web portal for [Computer Science House](https://csh.rit.edu) that migrates WiFi authentication from EAP-MSCHAPv2 (password-based) to EAP-TLS (certificate-based). Members log in with their CSH Keycloak account and receive a certificate-backed WiFi profile that works on iOS, macOS, and Android. Home router operators can also provision a RADIUS shared secret and download a RadSec client certificate for internet-facing [RFC 6614](https://www.rfc-editor.org/rfc/rfc6614) connectivity.
 
@@ -6,7 +6,7 @@ PINT is a self-service web portal for [Computer Science House](https://csh.rit.e
 
 | Feature | How |
 |---|---|
-| **iOS / macOS WiFi profile** | Generates an Apple mobileconfig (`.mobileconfig`) containing a FreeIPA-issued EAP-TLS client certificate, the WiFi CA, and 802.1X config. Install it and connect — no password needed. |
+| **iOS / macOS WiFi profile** | Generates an Apple mobileconfig (`.mobileconfig`) containing a FreeIPA-issued EAP-TLS client certificate, the WiFi CA, and 802.1X config. Install it and connect - no password needed. |
 | **Android WiFi profile** | Generates a PKCS#12 (`.p12`) bundle with the same certificate for import into Android's WiFi settings. |
 | **Home router (RadSec)** | Members can register a RADIUS shared secret and download a RadSec client certificate (`.p12`) to configure a home router for [RFC 6614 RADIUS over TLS](https://www.rfc-editor.org/rfc/rfc6614) on port 2083. |
 | **CA distribution** | One-tap download of the WiFi CA and RadSec CA certificates for manual trust store installation. |
@@ -91,7 +91,7 @@ The repo includes a FreeIPA stub server that generates a real CA at startup and 
 ```bash
 # 1. Copy and edit the dev env file
 cp .env.dev.example .env.dev
-# (edit .env.dev — the stub defaults work as-is for IPA fields)
+# (edit .env.dev - the stub defaults work as-is for IPA fields)
 
 # 2. Build and start everything
 make dev

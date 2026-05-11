@@ -32,13 +32,13 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	// FreeIPA client — authenticate at startup
+	// FreeIPA client: authenticate at startup
 	ipaClient := freeipa.New(cfg.IPAHost, cfg.IPAPrincipal, cfg.IPAPassword, cfg.IPASkipTLSVerify)
 	if err := ipaClient.Login(); err != nil {
 		log.Fatalf("freeipa login: %v", err)
 	}
 
-	// Kubernetes client — try in-cluster first, fall back to kubeconfig
+	// Kubernetes client: try in-cluster first, fall back to kubeconfig
 	restCfg, err := rest.InClusterConfig()
 	if err != nil {
 		restCfg, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)

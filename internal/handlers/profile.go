@@ -80,7 +80,7 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 	}
 }
 
-// CAHandler serves GET /profile/ca — returns the FreeIPA CA certificate as DER.
+// CAHandler serves GET /profile/ca, returns the FreeIPA CA certificate as DER.
 func CAHandler(caDER []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Content-Disposition", `attachment; filename="csh-ca.cer"`)

@@ -27,7 +27,7 @@ envSecret: pint-env
 
 # Names of the K8s Secrets PINT creates and manages at runtime.
 # These are referenced consistently across the Role, PINT env vars, and
-# FreeRADIUS volume mounts — change all three if you rename them.
+# FreeRADIUS volume mounts - change all three if you rename them.
 secrets:
   radiusClients: pint-radius-clients
   radiusConfig:  pint-radius-config
@@ -37,7 +37,7 @@ service:
   type: ClusterIP
   port: 80
 
-# FreeRADIUS — RadSec server mounted by home routers.
+# FreeRADIUS: RadSec server mounted by home routers.
 freeradius:
   enabled: true
   image:

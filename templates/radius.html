@@ -1,6 +1,6 @@
 <!-- templates/radius.html -->
 {{template "layout.html" .}}
-{{define "title"}}Home RadSec — PINT{{end}}
+{{define "title"}}Home RadSec | PINT{{end}}
 {{define "content"}}
 
 {{if .Client}}
@@ -19,12 +19,12 @@
           <dt class="col-sm-4"><span class="mdi mdi-ethernet"></span> Auth Port</dt>
           <dd class="col-sm-8"><code>2083</code></dd>
           <dt class="col-sm-4"><span class="mdi mdi-shield-lock"></span> Protocol</dt>
-          <dd class="col-sm-8">RadSec (RADIUS over TLS — RFC 6614)</dd>
+          <dd class="col-sm-8">RadSec (RADIUS over TLS, RFC 6614)</dd>
           <dt class="col-sm-4"><span class="mdi mdi-ip-network"></span> Source IP / CIDR</dt>
           {{if .IPCIDR}}
           <dd class="col-sm-8 mb-0"><code>{{.IPCIDR}}</code></dd>
           {{else}}
-          <dd class="col-sm-8 mb-0"><span class="text-warning"><span class="mdi mdi-alert"></span> Not set — any IP accepted</span></dd>
+          <dd class="col-sm-8 mb-0"><span class="text-warning"><span class="mdi mdi-alert"></span> Not set: any IP accepted</span></dd>
           {{end}}
         </dl>
       </div>
@@ -236,7 +236,7 @@
       <dt class="col-sm-4">Auth Port</dt>
       <dd class="col-sm-8"><code>2083</code></dd>
       <dt class="col-sm-4">Protocol</dt>
-      <dd class="col-sm-8">RadSec (RADIUS over TLS — RFC 6614)</dd>
+      <dd class="col-sm-8">RadSec (RADIUS over TLS, RFC 6614)</dd>
     </dl>
     <p>Broadcast the CSH WiFi SSID from your home router. PINT will generate a shared secret, private key, and client certificate so your router can authenticate users against the CSH RADIUS server.</p>
     <form method="POST" action="/radius/secret">

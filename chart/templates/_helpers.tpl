@@ -67,7 +67,7 @@ app.kubernetes.io/name={{ include "pint.freeradiusFullname" . }},app.kubernetes.
 {{- end }}
 
 {{/*
-Container image references — tag falls back to Chart.appVersion.
+Container image references: tag falls back to Chart.appVersion.
 */}}
 {{- define "pint.image" -}}
 {{ .Values.pint.image.repository }}:{{ default .Chart.AppVersion .Values.pint.image.tag }}

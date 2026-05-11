@@ -27,7 +27,7 @@ func CSRFMiddleware() gin.HandlerFunc {
 		}
 		// Refresh cookie on every response (SameSite=Lax, not HttpOnly so JS
 		// can read it if needed, but Secure is intentionally omitted here to
-		// work in local dev over HTTP — set Secure=true behind TLS in prod).
+		// work in local dev over HTTP; set Secure=true behind TLS in prod).
 		c.SetCookie(csrfCookieName, token, 0, "/", "", false, false)
 		c.Set(csrfContextKey, token)
 
@@ -48,6 +48,6 @@ func CSRFMiddleware() gin.HandlerFunc {
 
 func newCSRFToken() string {
 	b := make([]byte, 16)
-	rand.Read(b) //nolint:errcheck — rand.Read never returns an error
+	rand.Read(b) //nolint:errcheck -- rand.Read never returns an error
 	return hex.EncodeToString(b)
 }

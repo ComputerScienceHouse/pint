@@ -1,6 +1,6 @@
 apiVersion: v2
 name: pint
-description: Pouring IPA for Network Trust — CSH WiFi EAP-TLS enrollment and home RadSec management
+description: Pouring IPA for Network Trust - CSH WiFi EAP-TLS enrollment and home RadSec management
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

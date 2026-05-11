@@ -41,7 +41,7 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM 
 	}
 }
 
-// SaveSecretHandler serves POST /radius/secret — initial enrollment.
+// SaveSecretHandler serves POST /radius/secret (initial enrollment).
 // Renders the page directly with the one-time key and cert PEM.
 func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -107,7 +107,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 	}
 }
 
-// UpdateIPHandler serves POST /radius/update-ip — changes source IP/CIDR only.
+// UpdateIPHandler serves POST /radius/update-ip, changes source IP/CIDR only.
 func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
@@ -143,7 +143,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest
 	}
 }
 
-// DeleteSecretHandler serves POST /radius/delete — revokes cert and removes config.
+// DeleteSecretHandler serves POST /radius/delete, revokes cert and removes config.
 func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, ipaClient *freeipa.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
@@ -164,7 +164,7 @@ func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *
 	}
 }
 
-// RadSecCAHandler serves GET /radius/ca — streams the full RadSec CA chain as PEM.
+// RadSecCAHandler serves GET /radius/ca, streams the full RadSec CA chain as PEM.
 func RadSecCAHandler(caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("Content-Disposition", `attachment; filename="csh-radsec-ca-chain.pem"`)
@@ -263,7 +263,7 @@ func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, usern
 }
 
 // revokeExistingCert revokes the cert identified by client.CertSerial.
-// Errors are logged but not returned — revocation failure should not block deletion or reissuance.
+// Errors are logged but not returned; revocation failure should not block deletion or reissuance.
 func revokeExistingCert(ipaClient *freeipa.Client, client *radius.RadiusClient, caName string, reason int) {
 	if client == nil || client.CertSerial == "" {
 		return
