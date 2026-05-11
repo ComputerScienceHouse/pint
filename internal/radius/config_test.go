@@ -18,17 +18,20 @@ func TestRenderClientsConf_WithIP(t *testing.T) {
 	if !strings.Contains(out, "client mbillow_home") {
 		t.Error("missing client block header")
 	}
-	if !strings.Contains(out, "ipaddr    = 192.168.1.0/24") {
+	if !strings.Contains(out, "ipaddr         = 192.168.1.0/24") {
 		t.Error("missing ipaddr")
 	}
-	if !strings.Contains(out, "secret    = s3cr3t") {
+	if !strings.Contains(out, "secret         = s3cr3t") {
 		t.Error("missing secret")
 	}
-	if !strings.Contains(out, "proto     = tls") {
+	if !strings.Contains(out, "proto          = tls") {
 		t.Error("missing proto = tls (required for RadSec)")
 	}
-	if !strings.Contains(out, "shortname = mbillow-home") {
+	if !strings.Contains(out, "shortname      = mbillow-home") {
 		t.Error("missing shortname")
+	}
+	if !strings.Contains(out, "virtual_server = radsec") {
+		t.Error("missing virtual_server = radsec (required for RadSec routing)")
 	}
 }
 
@@ -38,7 +41,7 @@ func TestRenderClientsConf_NoIP(t *testing.T) {
 	}
 	out := radius.RenderClientsConf(clients)
 
-	if !strings.Contains(out, "ipaddr    = 0.0.0.0/0") {
+	if !strings.Contains(out, "ipaddr         = 0.0.0.0/0") {
 		t.Error("missing wildcard ipaddr for nil IPCIDR")
 	}
 }

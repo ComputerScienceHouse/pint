@@ -24,10 +24,11 @@ func RenderClientsConf(clients []RadiusClient) string {
 			ipaddr = *c.IPCIDR
 		}
 		fmt.Fprintf(&b, "client %s_home {\n", c.Username)
-		fmt.Fprintf(&b, "    ipaddr    = %s\n", ipaddr)
-		fmt.Fprintf(&b, "    secret    = %s\n", c.Secret)
-		b.WriteString("    proto     = tls\n")
-		fmt.Fprintf(&b, "    shortname = %s-home\n", c.Username)
+		fmt.Fprintf(&b, "    ipaddr         = %s\n", ipaddr)
+		fmt.Fprintf(&b, "    secret         = %s\n", c.Secret)
+		b.WriteString("    proto          = tls\n")
+		fmt.Fprintf(&b, "    shortname      = %s-home\n", c.Username)
+		b.WriteString("    virtual_server = radsec\n")
 		b.WriteString("}\n\n")
 	}
 	return b.String()

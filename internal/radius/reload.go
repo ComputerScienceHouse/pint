@@ -25,11 +25,16 @@ func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace,
 	})
 }
 
-// WriteRadSecServerCert writes the FreeRADIUS TLS cert+key to the named K8s Secret.
-func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, certPEM, keyPEM []byte) error {
+// WriteRadSecServerCert writes the FreeRADIUS TLS cert, key, and CA chain to the named K8s Secret.
+// FreeRADIUS mounts ca.pem to verify connecting RadSec client router certificates.
+func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, certPEM, keyPEM, caPEM []byte) error {
 	return upsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
-		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
+		Data: map[string][]byte{
+			"tls.crt": certPEM,
+			"tls.key": keyPEM,
+			"ca.pem":  caPEM,
+		},
 	})
 }
 
