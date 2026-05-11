@@ -80,16 +80,16 @@ func (c *Client) CAShow(caName string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(result.Certificate)
 }
 
-func (c *Client) CertRequest(username, realm, csrPEM, profile, caName string) ([]byte, error) {
-	principal := fmt.Sprintf("%s@%s", username, realm)
-	raw, err := c.rpc("cert_request",
-		[]interface{}{csrPEM},
-		map[string]interface{}{
-			"principal":  principal,
-			"profile_id": profile,
-			"cacn":       caName,
-		},
-	)
+func (c *Client) CertRequest(principal, csrPEM, caName, profileID string) ([]byte, error) {
+	kwargs := map[string]interface{}{
+		"principal": principal,
+		"cacn":      caName,
+	}
+	if profileID != "" {
+		kwargs["profile_id"] = profileID
+		kwargs["add"] = true
+	}
+	raw, err := c.rpc("cert_request", []interface{}{csrPEM}, kwargs)
 	if err != nil {
 		return nil, fmt.Errorf("cert_request: %w", err)
 	}
@@ -98,6 +98,18 @@ func (c *Client) CertRequest(username, realm, csrPEM, profile, caName string) ([
 		return nil, fmt.Errorf("cert_request parse: %w", err)
 	}
 	return base64.StdEncoding.DecodeString(result.Certificate)
+}
+
+// CertRevoke revokes a certificate by serial number.
+// reason follows RFC 5280: 0=unspecified, 4=superseded, 5=cessationOfOperation.
+// Returns nil if the cert was already revoked or not found, so callers can ignore
+// those cases without failing the overall operation.
+func (c *Client) CertRevoke(serial int64, caName string, reason int) error {
+	_, err := c.rpc("cert_revoke", []interface{}{serial}, map[string]interface{}{
+		"revocation_reason": reason,
+		"cacn":              caName,
+	})
+	return err
 }
 
 func (c *Client) rpc(method string, args []interface{}, kwargs map[string]interface{}) (json.RawMessage, error) {

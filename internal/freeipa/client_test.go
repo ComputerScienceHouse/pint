@@ -80,6 +80,13 @@ func stubIPA(t *testing.T) (*httptest.Server, *x509.Certificate, []byte) {
 				"error": nil,
 			}
 			json.NewEncoder(w).Encode(resp)
+
+		case "cert_revoke":
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":     0,
+				"result": map[string]interface{}{"result": true, "summary": ""},
+				"error":  nil,
+			})
 		}
 	})
 
@@ -178,6 +185,21 @@ func TestClient_CAShow(t *testing.T) {
 	}
 }
 
+func TestClient_CertRevoke(t *testing.T) {
+	srv, _, _ := stubIPA(t)
+	defer srv.Close()
+
+	host := strings.TrimPrefix(srv.URL, "https://")
+	client := freeipa.NewWithHTTPClient(host, "pint", "secret", srv.Client())
+	if err := client.Login(); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := client.CertRevoke(42, "ipa", 0); err != nil {
+		t.Fatalf("CertRevoke() error: %v", err)
+	}
+}
+
 func TestClient_CertRequest(t *testing.T) {
 	srv, _, _ := stubIPA(t)
 	defer srv.Close()
@@ -193,7 +215,7 @@ func TestClient_CertRequest(t *testing.T) {
 	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, tmpl, key)
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
 
-	certDER, err := client.CertRequest("testuser", "EXAMPLE.COM", string(csrPEM), "pint_wifi", "ipa")
+	certDER, err := client.CertRequest("testuser@EXAMPLE.COM", string(csrPEM), "ipa", "")
 	if err != nil {
 		t.Fatalf("CertRequest() error: %v", err)
 	}
