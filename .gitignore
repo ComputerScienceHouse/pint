@@ -1,3 +1,4 @@
-pint
-freeipa-stub
+/pint
+/freeipa-stub
 .env.dev
+dev/freeipa-stub/data/
