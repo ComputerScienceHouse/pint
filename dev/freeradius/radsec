@@ -18,7 +18,7 @@ server radsec {
 
             # RadSec CA chain — verifies that the connecting router's client cert
             # was issued by the PINT RadSec intermediate CA.
-            CA_file           = /run/secrets/radsec-server/ca.pem
+            ca_file           = /run/secrets/radsec-server/ca.pem
 
             tls_min_version   = "1.2"
             cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"
