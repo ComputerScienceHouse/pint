@@ -15,10 +15,12 @@ import (
 // ProfilePageHandler serves GET /profile.
 func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username, _ := getUsername(c)
+		nav, _ := getNavInfo(c)
 		c.HTML(http.StatusOK, "profile.html", gin.H{
-			"Username": username,
-			"SSID":     cfg.WiFiSSID,
+			"Username":  nav.Username,
+			"FullName":  nav.FullName,
+			"AvatarURL": nav.AvatarURL,
+			"SSID":      cfg.WiFiSSID,
 		})
 	}
 }
@@ -44,7 +46,7 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 			return
 		}
 
-		certDER, err := ipaClient.CertRequest(username, cfg.IPARealm, string(csrPEM), "pint_wifi", cfg.IPACAName)
+		certDER, err := ipaClient.CertRequest(username, string(csrPEM), cfg.IPACAName, cfg.IPACertProfile)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("cert request failed: %v", err)})
 			return

@@ -10,10 +10,20 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
+	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
+
+func testTemplates() multitemplate.Render {
+	r := multitemplate.New()
+	layout := "../../templates/layout.html"
+	for _, page := range []string{"index", "dashboard", "profile", "radius"} {
+		r.AddFromFiles(page+".html", layout, "../../templates/"+page+".html")
+	}
+	return r
+}
 
 // testAuth injects a mock csh-auth v2 Claims into the Gin context.
 func testAuth(username string) gin.HandlerFunc {
@@ -34,7 +44,7 @@ func minimalConfig() *config.Config {
 
 func TestIndexHandler(t *testing.T) {
 	r := gin.New()
-	r.LoadHTMLGlob("../../templates/*.html")
+	r.HTMLRender = testTemplates()
 	r.GET("/", handlers.IndexHandler(minimalConfig()))
 
 	w := httptest.NewRecorder()
@@ -50,7 +60,7 @@ func TestIndexHandler(t *testing.T) {
 
 func TestDashboardHandler(t *testing.T) {
 	r := gin.New()
-	r.LoadHTMLGlob("../../templates/*.html")
+	r.HTMLRender = testTemplates()
 	r.GET("/dashboard", testAuth("mbillow"), handlers.DashboardHandler(minimalConfig()))
 
 	w := httptest.NewRecorder()

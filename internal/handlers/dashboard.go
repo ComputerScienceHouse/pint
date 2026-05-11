@@ -10,9 +10,11 @@ import (
 
 func DashboardHandler(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		username, _ := getUsername(c)
+		nav, _ := getNavInfo(c)
 		c.HTML(http.StatusOK, "dashboard.html", gin.H{
-			"Username": username,
+			"Username":  nav.Username,
+			"FullName":  nav.FullName,
+			"AvatarURL": nav.AvatarURL,
 		})
 	}
 }
