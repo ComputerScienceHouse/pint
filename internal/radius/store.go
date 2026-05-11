@@ -14,14 +14,18 @@ import (
 
 // RadiusClient represents one home-router RADIUS entry.
 type RadiusClient struct {
-	Username string  `json:"username"`
-	Secret   string  `json:"secret"`
-	IPCIDR   *string `json:"ip_cidr"`
+	Username      string   `json:"username"`
+	Secret        string   `json:"secret"`
+	IPCIDR        *string  `json:"ip_cidr"`
+	CertSerial    string   `json:"cert_serial,omitempty"`
+	CertSubject   string   `json:"cert_subject,omitempty"`
+	CertIssuer    string   `json:"cert_issuer,omitempty"`
+	CertNotBefore string   `json:"cert_not_before,omitempty"`
+	CertNotAfter  string   `json:"cert_not_after,omitempty"`
+	CertKeyBits   int      `json:"cert_key_bits,omitempty"`
+	CertEKUs      []string `json:"cert_ekus,omitempty"`
 }
 
-type clientList struct {
-	Clients []RadiusClient `json:"clients"`
-}
 
 // ClientStore is a Kubernetes-Secret-backed list of RadiusClient entries.
 type ClientStore struct {
@@ -50,17 +54,15 @@ func (s *ClientStore) Load(ctx context.Context) error {
 	if !ok {
 		return nil
 	}
-	var list clientList
-	if err := json.Unmarshal(data, &list); err != nil {
+	if err := json.Unmarshal(data, &s.clients); err != nil {
 		return fmt.Errorf("unmarshal clients.json: %w", err)
 	}
-	s.clients = list.Clients
 	return nil
 }
 
 // Save writes the current client list back to the Kubernetes Secret, creating it if needed.
 func (s *ClientStore) Save(ctx context.Context) error {
-	data, err := json.Marshal(clientList{Clients: s.clients})
+	data, err := json.Marshal(s.clients)
 	if err != nil {
 		return err
 	}

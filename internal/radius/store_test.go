@@ -87,7 +87,7 @@ func TestStore_LoadExisting(t *testing.T) {
 	existing := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "pint-radius-clients", Namespace: "default"},
 		Data: map[string][]byte{
-			"clients.json": []byte(`{"clients":[{"username":"jsmith","secret":"abc","ip_cidr":null}]}`),
+			"clients.json": []byte(`[{"username":"jsmith","secret":"abc","ip_cidr":null}]`),
 		},
 	}
 	k8s := fake.NewSimpleClientset(existing)
