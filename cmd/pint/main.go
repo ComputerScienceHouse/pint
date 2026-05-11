@@ -75,14 +75,15 @@ func main() {
 
 	radSecCAChainPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: radSecCACertDER})) +
 		string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootCACertDER}))
+	wifiCAPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 
 	// Load or renew FreeRADIUS server TLS cert
-	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM)); err != nil {
+	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM); err != nil {
 		log.Fatalf("radsec server cert: %v", err)
 	}
 
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
-	go watchRadSecServerCert(k8sClient, restCfg, ipaClient, cfg, []byte(radSecCAChainPEM))
+	go watchRadSecServerCert(k8sClient, restCfg, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
 
 	// csh-auth v2: package-level Init returns (Auth, error)
 	auth, err := cshauth.Init(
@@ -142,7 +143,7 @@ func buildTemplates() multitemplate.Render {
 // loadOrRenewRadSecServerCert reads the existing FreeRADIUS TLS cert from the K8s Secret.
 // If it exists and has more than radSecRenewBefore of validity remaining, it is used as-is
 // and renewed is false. Otherwise a new cert is issued and renewed is true.
-func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
+func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
 	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.RadSecCertSecret, metav1.GetOptions{})
 	if err == nil {
 		existing := secret.Data["tls.crt"]
@@ -173,7 +174,7 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 	newCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privKey)})
 
-	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, newCertPEM, newKeyPEM, caPEM); writeErr != nil {
+	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, newCertPEM, newKeyPEM, caPEM, wifiCAPEM); writeErr != nil {
 		return nil, nil, false, fmt.Errorf("write radsec cert: %w", writeErr)
 	}
 	log.Printf("issued and stored new RadSec server cert")
@@ -183,12 +184,12 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 // watchRadSecServerCert runs forever, checking every 24 hours whether the RadSec server
 // cert needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up
 // without a full restart.
-func watchRadSecServerCert(k8sClient kubernetes.Interface, restCfg *rest.Config, ipaClient *freeipa.Client, cfg *config.Config, caPEM []byte) {
+func watchRadSecServerCert(k8sClient kubernetes.Interface, restCfg *rest.Config, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
 		ctx := context.Background()
-		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, k8sClient, ipaClient, cfg, caPEM)
+		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, k8sClient, ipaClient, cfg, caPEM, wifiCAPEM)
 		if err != nil {
 			log.Printf("radsec cert watcher: renewal failed: %v", err)
 			continue

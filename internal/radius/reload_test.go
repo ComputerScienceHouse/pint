@@ -45,8 +45,9 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	certPEM := []byte("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
 	keyPEM := []byte("-----BEGIN RSA PRIVATE KEY-----\nfake\n-----END RSA PRIVATE KEY-----\n")
 	caPEM := []byte("-----BEGIN CERTIFICATE-----\nfake-ca\n-----END CERTIFICATE-----\n")
+	wifiCAPEM := []byte("-----BEGIN CERTIFICATE-----\nfake-wifi-ca\n-----END CERTIFICATE-----\n")
 
-	err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM)
+	err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM)
 	if err != nil {
 		t.Fatalf("WriteRadSecServerCert() error: %v", err)
 	}
@@ -64,9 +65,12 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	if string(secret.Data["ca.pem"]) != string(caPEM) {
 		t.Error("ca.pem does not match")
 	}
+	if string(secret.Data["wifi-ca.pem"]) != string(wifiCAPEM) {
+		t.Error("wifi-ca.pem does not match")
+	}
 
 	// Call again to exercise the update path
-	err = radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM)
+	err = radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM)
 	if err != nil {
 		t.Fatalf("WriteRadSecServerCert() update error: %v", err)
 	}

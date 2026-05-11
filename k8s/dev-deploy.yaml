@@ -77,3 +77,65 @@ spec:
   ports:
     - port: 80
       targetPort: 8080
+---
+# FreeRADIUS — RadSec server for home router authentication.
+# Certs and client list are written by PINT into K8s Secrets and mounted here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: freeradius
+  namespace: pint
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: freeradius
+  template:
+    metadata:
+      labels:
+        app: freeradius
+    spec:
+      containers:
+        - name: freeradius
+          image: pint-freeradius:dev
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 2083
+              name: radsec
+          volumeMounts:
+            # Full-directory mount (not subPath) so K8s auto-updates when the
+            # Secret changes.  clients.conf includes this via $-INCLUDE.
+            - name: dynamic-clients
+              mountPath: /etc/freeradius/dynamic
+              readOnly: true
+            # All TLS material: server cert+key, RadSec CA, WiFi CA.
+            - name: radsec-certs
+              mountPath: /run/secrets/radsec-server
+              readOnly: true
+      volumes:
+        - name: dynamic-clients
+          secret:
+            secretName: pint-radius-config
+            optional: true
+        - name: radsec-certs
+          secret:
+            secretName: pint-radsec-server
+            optional: true
+            defaultMode: 0440
+---
+# NodePort 32083 → FreeRADIUS 2083.
+# With k3d --port "32083:32083@loadbalancer" this is reachable at localhost:32083.
+apiVersion: v1
+kind: Service
+metadata:
+  name: freeradius
+  namespace: pint
+spec:
+  type: NodePort
+  selector:
+    app: freeradius
+  ports:
+    - port: 2083
+      targetPort: 2083
+      nodePort: 32083
+      name: radsec

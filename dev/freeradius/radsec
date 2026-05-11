@@ -1,0 +1,48 @@
+# RadSec (RADIUS over TLS, RFC 6614) virtual server.
+# Handles RADIUS authentication forwarded by home routers over a mutual-TLS
+# connection on port 2083.  Each router client is registered in clients.conf
+# with virtual_server = radsec, so FreeRADIUS routes their requests here.
+server radsec {
+
+    listen {
+        type   = auth+acct
+        ipaddr = *
+        port   = 2083
+        proto  = tcp
+
+        tls {
+            # Server cert — presented to connecting routers and to EAP supplicants.
+            # Issued by PINT via FreeIPA and written to the pint-radsec-server Secret.
+            private_key_file  = /run/secrets/radsec-server/tls.key
+            certificate_file  = /run/secrets/radsec-server/tls.crt
+
+            # RadSec CA chain — verifies that the connecting router's client cert
+            # was issued by the PINT RadSec intermediate CA.
+            CA_file           = /run/secrets/radsec-server/ca.pem
+
+            tls_min_version   = "1.2"
+            cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"
+
+            verify {
+                client_cert_ok = yes
+                check_crl      = no
+            }
+        }
+    }
+
+    authorize {
+        eap
+    }
+
+    authenticate {
+        Auth-Type EAP {
+            eap
+        }
+    }
+
+    post-auth {
+        Post-Auth-Type REJECT {
+            attr_filter.access_reject
+        }
+    }
+}
