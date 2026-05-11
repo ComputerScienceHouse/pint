@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -18,9 +19,13 @@ type Config struct {
 	IPAServiceAccount    string
 	IPAPassword          string
 	IPACAName            string
-	IPARealm             string
 	RadSecCAName         string // PINT_IPA_RADSEC_CA_NAME — FreeIPA intermediate CA for RadSec certs
-	RadiusPrincipal      string // PINT_RADIUS_PRINCIPAL — FreeRADIUS Kerberos service principal
+	RootCAName           string // PINT_IPA_ROOT_CA_NAME — signing root CA; defaults to "ipa"
+	IPACertProfile          string // PINT_IPA_CERT_PROFILE — FreeIPA profile for WiFi client certs (optional)
+	RadSecClientCertProfile string // PINT_IPA_RADSEC_CLIENT_CERT_PROFILE — FreeIPA profile for RadSec router client certs (optional)
+	RadSecServerCertProfile string // PINT_IPA_RADSEC_SERVER_CERT_PROFILE — FreeIPA profile for FreeRADIUS server cert (optional)
+	IPAPrincipal         string // derived: full principal, e.g. pint/host@REALM
+	IPAServiceHostname   string // derived: hostname portion of principal, e.g. host
 	IPASkipTLSVerify     bool
 
 	// WiFi
@@ -58,10 +63,9 @@ func Load() (*Config, error) {
 	cfg.IPAServiceAccount = require("PINT_IPA_SERVICE_ACCOUNT")
 	cfg.IPAPassword = require("PINT_IPA_PASSWORD")
 	cfg.IPACAName = require("PINT_IPA_CA_NAME")
-	cfg.IPARealm = require("PINT_IPA_REALM")
 	cfg.RadSecCAName = require("PINT_IPA_RADSEC_CA_NAME")
-	cfg.RadiusPrincipal = require("PINT_RADIUS_PRINCIPAL")
 	cfg.WiFiSSID = require("PINT_WIFI_SSID")
+
 	cfg.Namespace = require("PINT_NAMESPACE")
 	cfg.RadiusClientsSecret = require("PINT_RADIUS_CLIENTS_SECRET")
 	cfg.RadiusConfigSecret = require("PINT_RADIUS_CONFIG_SECRET")
@@ -74,6 +78,42 @@ func Load() (*Config, error) {
 	}
 
 	cfg.IPASkipTLSVerify = os.Getenv("PINT_IPA_SKIP_TLS_VERIFY") == "true"
+	cfg.RootCAName = os.Getenv("PINT_IPA_ROOT_CA_NAME")
+	if cfg.RootCAName == "" {
+		cfg.RootCAName = "ipa"
+	}
+	cfg.IPACertProfile = os.Getenv("PINT_IPA_CERT_PROFILE")
+	cfg.RadSecClientCertProfile = os.Getenv("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE")
+	cfg.RadSecServerCertProfile = os.Getenv("PINT_IPA_RADSEC_SERVER_CERT_PROFILE")
+	cfg.IPAPrincipal = principalFromDN(cfg.IPAServiceAccount)
+	cfg.IPAServiceHostname = hostnameFromPrincipal(cfg.IPAPrincipal)
 
 	return cfg, nil
+}
+
+// principalFromDN extracts the Kerberos principal from a FreeIPA service
+// account bind DN of the form:
+//
+//	krbprincipalname=pint/host@REALM,cn=services,...
+func principalFromDN(dn string) string {
+	first := strings.SplitN(dn, ",", 2)[0]
+	parts := strings.SplitN(first, "=", 2)
+	if len(parts) != 2 {
+		return dn
+	}
+	return parts[1] // e.g. "pint/host@REALM"
+}
+
+// hostnameFromPrincipal extracts the hostname from a service principal of the
+// form service/hostname@REALM, returning just "hostname".
+func hostnameFromPrincipal(principal string) string {
+	// strip @REALM
+	if i := strings.LastIndex(principal, "@"); i != -1 {
+		principal = principal[:i]
+	}
+	// strip "service/"
+	if i := strings.Index(principal, "/"); i != -1 {
+		return principal[i+1:]
+	}
+	return principal
 }
