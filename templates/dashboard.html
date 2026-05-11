@@ -2,25 +2,26 @@
 {{template "layout.html" .}}
 {{define "title"}}Dashboard — PINT{{end}}
 {{define "content"}}
-<h2>Welcome, {{.Username}}</h2>
-<div class="row mt-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">WiFi Profile</h5>
-                <p class="card-text">Download your personal certificate profile for iOS, macOS, or Android.</p>
-                <a href="/profile" class="btn btn-primary">Get Profile</a>
-            </div>
+<h2 class="mb-4"><span class="mdi mdi-hand-wave"></span> Welcome, {{if .FullName}}{{.FullName}}{{else}}{{.Username}}{{end}}!</h2>
+
+<div class="card bg-info text-white mb-4">
+    <div class="card-body" style="padding: 2.25rem 2.5rem;">
+        <div class="d-flex align-items-center mb-3">
+            <span class="mdi mdi-wifi mr-3" style="font-size: 2.5rem; line-height: 1;"></span>
+            <h4 class="mb-0" style="font-weight: 700;">Connect to CSH WiFi</h4>
         </div>
+        <p class="mb-4" style="font-size: 1.05rem; opacity: 0.9;">
+            Pour a pint and get connected by downloading your personal EAP-TLS certificate profile for iOS, macOS, or Android.
+        </p>
+        <a href="/profile" class="btn btn-success btn-lg"><span class="mdi mdi-arrow-right mr-1"></span> Get Connected</a>
     </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Home RADIUS</h5>
-                <p class="card-text">Connect your home router to the CSH network using your own RADIUS shared secret.</p>
-                <a href="/radius" class="btn btn-secondary">Manage Secret</a>
-            </div>
-        </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body" style="padding: 1.5rem;">
+        <h5 class="card-title"><span class="mdi mdi-router-wireless"></span> Deploy CSH WiFi at Home</h5>
+        <p class="card-text mb-3">Broadcast the CSH WiFi SSID from your home router using your own RADIUS credentials.</p>
+        <a href="/radius" class="btn btn-secondary"><span class="mdi mdi-cog-outline mr-1"></span> Configure Home Deployment</a>
     </div>
 </div>
 {{end}}
