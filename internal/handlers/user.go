@@ -2,20 +2,54 @@
 package handlers
 
 import (
+	"fmt"
+	"net/http"
+	"net/url"
+
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/gin-gonic/gin"
 )
 
-// getUsername extracts the CSH username from the csh-auth v2 middleware context.
-// csh-auth v2 stores *cshauth.Claims at the "cshauth" key.
-func getUsername(c *gin.Context) (string, bool) {
+// navInfo holds the fields injected into every authenticated page render.
+type navInfo struct {
+	Username  string
+	FullName  string
+	AvatarURL string
+}
+
+// getNavInfo extracts user identity from the csh-auth v2 middleware context.
+func getNavInfo(c *gin.Context) (navInfo, bool) {
 	raw, exists := c.Get(cshauth.ContextKey)
 	if !exists {
-		return "", false
+		return navInfo{}, false
 	}
 	claims, ok := raw.(*cshauth.Claims)
 	if !ok {
-		return "", false
+		return navInfo{}, false
 	}
-	return claims.Username, true
+	return navInfo{
+		Username:  claims.Username,
+		FullName:  claims.FullName,
+		AvatarURL: fmt.Sprintf("https://profiles.csh.rit.edu/image/%s", claims.Username),
+	}, true
+}
+
+// getUsername is a convenience wrapper for handlers that only need the username.
+func getUsername(c *gin.Context) (string, bool) {
+	info, ok := getNavInfo(c)
+	return info.Username, ok
+}
+
+// RequireAuth aborts with a redirect to loginURL if csh-auth Claims are not in context.
+// Use this after CookieMiddleware on any route group that must be authenticated.
+func RequireAuth(loginURL string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, exists := c.Get(cshauth.ContextKey); !exists {
+			target := loginURL + "?referer=" + url.QueryEscape(c.Request.URL.RequestURI())
+			c.Redirect(http.StatusFound, target)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
