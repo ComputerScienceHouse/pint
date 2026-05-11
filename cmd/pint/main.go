@@ -52,6 +52,11 @@ func main() {
 		log.Fatalf("kubernetes client: %v", err)
 	}
 
+	// Initialize RADIUS secrets with empty content if they don't exist yet.
+	if err := radius.EnsureConfigSecrets(context.Background(), k8sClient, cfg.Namespace, cfg.RadiusClientsSecret, cfg.RadiusConfigSecret); err != nil {
+		log.Fatalf("init radius secrets: %v", err)
+	}
+
 	// Fetch all three CA certs and the RadSec server cert in parallel.
 	var (
 		caDER           []byte

@@ -41,12 +41,38 @@ func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namesp
 	})
 }
 
+// EnsureConfigSecrets creates the RADIUS client secrets with empty content if they don't
+// already exist. Safe to call on every startup — it is a no-op when secrets are present.
+func EnsureConfigSecrets(ctx context.Context, k8s kubernetes.Interface, namespace, clientsSecret, configSecret string) error {
+	if err := createIfAbsent(ctx, k8s, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: clientsSecret, Namespace: namespace},
+		Data:       map[string][]byte{"clients.json": []byte("[]")},
+	}); err != nil {
+		return fmt.Errorf("init clients secret: %w", err)
+	}
+	if err := createIfAbsent(ctx, k8s, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: configSecret, Namespace: namespace},
+		Data:       map[string][]byte{"clients.conf": []byte(RenderClientsConf(nil))},
+	}); err != nil {
+		return fmt.Errorf("init config secret: %w", err)
+	}
+	return nil
+}
+
 // upsertSecret creates or updates a Kubernetes Secret.
 func upsertSecret(ctx context.Context, k8s kubernetes.Interface, secret *corev1.Secret) error {
 	ns := secret.Namespace
 	_, err := k8s.CoreV1().Secrets(ns).Update(ctx, secret, metav1.UpdateOptions{})
 	if errors.IsNotFound(err) {
 		_, err = k8s.CoreV1().Secrets(ns).Create(ctx, secret, metav1.CreateOptions{})
+	}
+	return err
+}
+
+func createIfAbsent(ctx context.Context, k8s kubernetes.Interface, secret *corev1.Secret) error {
+	_, err := k8s.CoreV1().Secrets(secret.Namespace).Create(ctx, secret, metav1.CreateOptions{})
+	if errors.IsAlreadyExists(err) {
+		return nil
 	}
 	return err
 }
