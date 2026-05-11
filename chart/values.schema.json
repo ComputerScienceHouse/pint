@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PINT",
+  "description": "Pouring IPA for Network Trust - CSH WiFi EAP-TLS enrollment and home RadSec management",
+  "type": "object",
+  "properties": {
+    "nameOverride": {
+      "type": "string",
+      "description": "Override the chart name used in resource names."
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "Override the fully qualified resource name."
+    },
+    "serviceAccount": {
+      "type": "object",
+      "description": "ServiceAccount settings.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "ServiceAccount name. Defaults to the full chart name."
+        }
+      }
+    },
+    "envSecret": {
+      "type": "string",
+      "description": "Name of the pre-existing Secret containing PINT_CLIENT_SECRET and PINT_IPA_PASSWORD.",
+      "default": "pint-env"
+    },
+    "config": {
+      "type": "object",
+      "description": "Non-sensitive PINT application configuration, rendered into a ConfigMap.",
+      "properties": {
+        "clientID": {
+          "type": "string",
+          "description": "Keycloak OIDC client ID."
+        },
+        "serverURL": {
+          "type": "string",
+          "description": "Public base URL of this service (e.g. https://pint.csh.rit.edu). Login and callback URLs are derived from this."
+        },
+        "ipaHost": {
+          "type": "string",
+          "description": "FreeIPA host and port (e.g. ipa.csh.rit.edu:443)."
+        },
+        "ipaServiceAccount": {
+          "type": "string",
+          "description": "FreeIPA service account DN used to issue certificates."
+        },
+        "ipaCAName": {
+          "type": "string",
+          "description": "FreeIPA CA name for WiFi client certificates."
+        },
+        "ipaRadSecCAName": {
+          "type": "string",
+          "description": "FreeIPA CA name for RadSec certificates."
+        },
+        "ipaRootCAName": {
+          "type": "string",
+          "description": "FreeIPA root CA name.",
+          "default": "ipa"
+        },
+        "ipaCertProfile": {
+          "type": "string",
+          "description": "Dogtag certificate profile for WiFi client certs. Leave blank to use the CA default."
+        },
+        "ipaRadSecClientCertProfile": {
+          "type": "string",
+          "description": "Dogtag certificate profile for RadSec router client certs. Leave blank to use the CA default."
+        },
+        "ipaRadSecServerCertProfile": {
+          "type": "string",
+          "description": "Dogtag certificate profile for the FreeRADIUS server cert. Leave blank to use the CA default."
+        },
+        "ipaSkipTLSVerify": {
+          "type": "boolean",
+          "description": "Skip TLS verification when connecting to FreeIPA. For development only.",
+          "default": false
+        },
+        "wifiSSID": {
+          "type": "string",
+          "description": "WiFi SSID embedded in generated device profiles."
+        },
+        "radiusServer": {
+          "type": "string",
+          "description": "RadSec server address shown to users (e.g. radius.csh.rit.edu:2083)."
+        }
+      },
+      "required": ["clientID", "serverURL", "ipaHost", "ipaServiceAccount", "ipaCAName", "ipaRadSecCAName", "wifiSSID", "radiusServer"]
+    },
+    "secrets": {
+      "type": "object",
+      "description": "Names of the Kubernetes Secrets PINT creates and manages at runtime.",
+      "properties": {
+        "radiusClients": {
+          "type": "string",
+          "description": "Secret storing the RADIUS client list (clients.json).",
+          "default": "pint-radius-clients"
+        },
+        "radiusConfig": {
+          "type": "string",
+          "description": "Secret storing the rendered FreeRADIUS clients.conf.",
+          "default": "pint-radius-config"
+        },
+        "radSecCert": {
+          "type": "string",
+          "description": "Secret storing the FreeRADIUS TLS certificate and key.",
+          "default": "pint-radsec-server"
+        }
+      }
+    },
+    "pint": {
+      "type": "object",
+      "description": "PINT web application settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy the PINT pod. Set false to run PINT as a local process instead.",
+          "default": true
+        },
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of PINT replicas.",
+          "default": 1
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "description": "Container image repository.",
+              "default": "pint"
+            },
+            "tag": {
+              "type": "string",
+              "description": "Image tag. Defaults to the chart appVersion."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"],
+              "default": "IfNotPresent"
+            }
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "description": "Kubernetes Service for the PINT web application.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"],
+          "default": "ClusterIP"
+        },
+        "port": {
+          "type": "integer",
+          "default": 80
+        }
+      }
+    },
+    "freeradius": {
+      "type": "object",
+      "description": "FreeRADIUS RadSec server settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Deploy the FreeRADIUS pod.",
+          "default": true
+        },
+        "image": {
+          "type": "object",
+          "properties": {
+            "repository": {
+              "type": "string",
+              "default": "pint-freeradius"
+            },
+            "tag": {
+              "type": "string",
+              "description": "Image tag. Defaults to the chart appVersion."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"],
+              "default": "IfNotPresent"
+            }
+          }
+        },
+        "service": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"],
+              "default": "LoadBalancer"
+            },
+            "port": {
+              "type": "integer",
+              "default": 2083
+            },
+            "nodePort": {
+              "type": ["integer", "null"],
+              "description": "NodePort number. Only used when service.type is NodePort."
+            }
+          }
+        },
+        "securityContext": {
+          "type": "object",
+          "description": "Pod security context for FreeRADIUS. Override to {} for environments without pod security enforcement."
+        }
+      }
+    },
+    "openshift": {
+      "type": "object",
+      "description": "OpenShift-specific resources.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Create an OpenShift Route for the PINT service.",
+          "default": false
+        },
+        "route": {
+          "type": "object",
+          "properties": {
+            "host": {
+              "type": "string",
+              "description": "Route hostname. Leave blank for an auto-assigned hostname."
+            },
+            "tls": {
+              "type": "object",
+              "properties": {
+                "termination": {
+                  "type": "string",
+                  "enum": ["edge", "reencrypt", "passthrough"],
+                  "default": "edge"
+                },
+                "insecureEdgeTerminationPolicy": {
+                  "type": "string",
+                  "enum": ["Allow", "Redirect", "None"],
+                  "default": "Redirect"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
