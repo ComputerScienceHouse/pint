@@ -16,16 +16,15 @@ lint:
 	go vet ./...
 
 dev: build build-stub
+	@pkill -x $(STUB) 2>/dev/null || true
 	@echo "Starting FreeIPA stub on :8088..."
-	./$(STUB) &
+	@set -a && . .env.dev && set +a && ./$(STUB) &
+	@sleep 1
 	@echo "Starting PINT..."
 	@set -a && . .env.dev && set +a && ./$(BINARY)
 
 k8s-dev:
-	kubectl apply -k deploy/overlays/dev
-
-k8s-prod:
-	kubectl apply -k deploy/overlays/prod
+	kubectl apply -f k8s/dev-deploy.yaml
 
 docker-build:
 	docker build -t pint:dev .
