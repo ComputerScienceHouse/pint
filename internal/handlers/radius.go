@@ -19,7 +19,6 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-gonic/gin"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 var ekuNames = map[x509.ExtKeyUsage]string{
@@ -43,7 +42,7 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM 
 
 // SaveSecretHandler serves POST /radius/secret (initial enrollment).
 // Renders the page directly with the one-time key and cert PEM.
-func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, caChainPEM string) gin.HandlerFunc {
+func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
@@ -67,7 +66,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
+		if err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -77,7 +76,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 
 // RegenerateHandler serves POST /radius/regenerate.
 // Revokes the existing cert, issues new credentials, and renders once with the new key/cert PEM.
-func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, caChainPEM string) gin.HandlerFunc {
+func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
@@ -99,7 +98,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
+		if err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -108,7 +107,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 }
 
 // UpdateIPHandler serves POST /radius/update-ip, changes source IP/CIDR only.
-func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config) gin.HandlerFunc {
+func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 
@@ -135,7 +134,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest
 		}
 		store.Upsert(updated)
 
-		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
+		if err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -144,7 +143,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest
 }
 
 // DeleteSecretHandler serves POST /radius/delete, revokes cert and removes config.
-func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *rest.Config, ipaClient *freeipa.Client) gin.HandlerFunc {
+func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient *freeipa.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 
@@ -156,7 +155,7 @@ func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, restCfg *
 		revokeExistingCert(ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
 		store.Delete(username)
 
-		if err := commitStore(c, store, k8s, restCfg, cfg); err != nil {
+		if err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -190,7 +189,7 @@ func radiusPageData(c *gin.Context, nav navInfo, radiusServer string, client *ra
 
 // commitStore saves the store, writes the RADIUS config, and reloads FreeRADIUS.
 // Reload errors are non-fatal and set as X-Reload-Warning. Returns true on success.
-func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Interface, restCfg *rest.Config, cfg *config.Config) error {
+func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Interface, cfg *config.Config) error {
 	ctx := c.Request.Context()
 	if err := store.Save(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -200,7 +199,7 @@ func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Inter
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return err
 	}
-	if err := radius.Reload(ctx, k8s, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
+	if err := radius.Reload(ctx, k8s, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
 		c.Header("X-Reload-Warning", err.Error())
 	}
 	return nil

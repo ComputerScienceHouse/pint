@@ -88,7 +88,7 @@ func main() {
 	}
 
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
-	go watchRadSecServerCert(k8sClient, restCfg, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
+	go watchRadSecServerCert(k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
 
 	// csh-auth v2: package-level Init returns (Auth, error)
 	auth, err := cshauth.Init(
@@ -123,10 +123,10 @@ func main() {
 		protected.POST("/profile/generate", handlers.GenerateProfileHandler(ipaClient, cfg, caDER))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/secret", handlers.SaveSecretHandler(ipaClient, cfg, k8sClient, restCfg, radSecCAChainPEM))
-		protected.POST("/radius/regenerate", handlers.RegenerateHandler(ipaClient, cfg, k8sClient, restCfg, radSecCAChainPEM))
-		protected.POST("/radius/update-ip", handlers.UpdateIPHandler(cfg, k8sClient, restCfg))
-		protected.POST("/radius/delete", handlers.DeleteSecretHandler(cfg, k8sClient, restCfg, ipaClient))
+		protected.POST("/radius/secret", handlers.SaveSecretHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
+		protected.POST("/radius/regenerate", handlers.RegenerateHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
+		protected.POST("/radius/update-ip", handlers.UpdateIPHandler(cfg, k8sClient))
+		protected.POST("/radius/delete", handlers.DeleteSecretHandler(cfg, k8sClient, ipaClient))
 		protected.GET("/radius/ca", handlers.RadSecCAHandler(radSecCAChainPEM))
 	}
 
@@ -189,7 +189,7 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 // watchRadSecServerCert runs forever, checking every 24 hours whether the RadSec server
 // cert needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up
 // without a full restart.
-func watchRadSecServerCert(k8sClient kubernetes.Interface, restCfg *rest.Config, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) {
+func watchRadSecServerCert(k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
@@ -200,7 +200,7 @@ func watchRadSecServerCert(k8sClient kubernetes.Interface, restCfg *rest.Config,
 			continue
 		}
 		if renewed {
-			if err := radius.Reload(ctx, k8sClient, restCfg, cfg.Namespace, cfg.FreeRADIUSPodSelector); err != nil {
+			if err := radius.Reload(ctx, k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
 				log.Printf("radsec cert watcher: freeradius reload failed: %v", err)
 			} else {
 				log.Printf("radsec cert watcher: renewed cert and reloaded freeradius")

@@ -30,7 +30,7 @@ func fullEnv() map[string]string {
 		"PINT_RADIUS_CLIENTS_SECRET":   "pint-radius-clients",
 		"PINT_RADIUS_CONFIG_SECRET":    "pint-radius-config",
 		"PINT_RADSEC_CERT_SECRET":      "pint-radsec-server",
-		"PINT_FREERADIUS_POD_SELECTOR": "app=freeradius",
+		"PINT_FREERADIUS_DEPLOYMENT": "pint-freeradius",
 		"PINT_RADIUS_SERVER":           "radius.example.com:1812",
 	}
 }

@@ -1,0 +1,55 @@
+{{- if .Values.freeradius.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pint.freeradiusFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.freeradiusLabels" . | nindent 4 }}
+data:
+  radsec: |
+    clients radsec {
+        $-INCLUDE /etc/freeradius/dynamic/clients.conf
+    }
+
+    server radsec {
+
+        listen {
+            type    = auth
+            ipaddr  = *
+            port    = 2083
+            proto   = tcp
+            clients = radsec
+
+            tls {
+                private_key_file  = /run/secrets/radsec-server/tls.key
+                certificate_file  = /run/secrets/radsec-server/tls.crt
+                ca_file           = /run/secrets/radsec-server/ca.pem
+
+                tls_min_version   = "1.2"
+                cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"
+
+                verify {
+                    client_cert_ok = yes
+                    check_crl      = {{ if .Values.freeradius.checkCRL }}yes{{ else }}no{{ end }}
+                }
+            }
+        }
+
+        authorize {
+            eap
+        }
+
+        authenticate {
+            Auth-Type EAP {
+                eap
+            }
+        }
+
+        post-auth {
+            Post-Auth-Type REJECT {
+                attr_filter.access_reject
+            }
+        }
+    }
+{{- end }}

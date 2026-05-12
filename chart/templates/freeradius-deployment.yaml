@@ -24,10 +24,7 @@ spec:
             - containerPort: 2083
               name: radsec
           securityContext:
-            runAsNonRoot: true
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: [ALL]
+            {{- toYaml .Values.freeradius.securityContext | nindent 12 }}
           volumeMounts:
             # Full-directory mount (not subPath) so K8s auto-syncs clients.conf
             # when the Secret changes; FreeRADIUS picks it up on the next SIGHUP.
@@ -39,6 +36,12 @@ spec:
             - name: radsec-certs
               mountPath: /run/secrets/radsec-server
               readOnly: true
+            # Rendered radsec virtual server config (overrides the baked-in file).
+            # subPath keeps it as a single file; changes require a rollout restart.
+            - name: freeradius-config
+              mountPath: /etc/raddb/sites-available/radsec
+              subPath: radsec
+              readOnly: true
       volumes:
         - name: dynamic-clients
           secret:
@@ -49,4 +52,7 @@ spec:
             secretName: {{ .Values.secrets.radSecCert }}
             optional: true
             defaultMode: 0444
+        - name: freeradius-config
+          configMap:
+            name: {{ include "pint.freeradiusFullname" . }}
 {{- end }}

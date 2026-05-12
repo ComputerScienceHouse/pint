@@ -2,17 +2,15 @@
 package radius
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 )
 
 // WriteRadiusConfig renders clients.conf from the given client list and writes it
@@ -77,43 +75,15 @@ func createIfAbsent(ctx context.Context, k8s kubernetes.Interface, secret *corev
 	return err
 }
 
-// Reload finds the first FreeRADIUS pod matching podSelector and sends SIGHUP (kill -HUP 1).
-func Reload(ctx context.Context, k8s kubernetes.Interface, restCfg *rest.Config, namespace, podSelector string) error {
-	pods, err := k8s.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: podSelector,
-	})
-	if err != nil {
-		return fmt.Errorf("list pods: %w", err)
-	}
-	if len(pods.Items) == 0 {
-		return fmt.Errorf("no FreeRADIUS pod found matching %s", podSelector)
-	}
-	pod := pods.Items[0]
-
-	restClient := k8s.CoreV1().RESTClient()
-	if restClient == nil {
-		return fmt.Errorf("REST client is not available")
-	}
-
-	req := restClient.Post().
-		Resource("pods").
-		Name(pod.Name).
-		Namespace(namespace).
-		SubResource("exec").
-		VersionedParams(&corev1.PodExecOptions{
-			Command: []string{"kill", "-HUP", "1"},
-			Stdout:  true,
-			Stderr:  true,
-		}, scheme.ParameterCodec)
-
-	exec, err := remotecommand.NewSPDYExecutor(restCfg, "POST", req.URL())
-	if err != nil {
-		return fmt.Errorf("create executor: %w", err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	return exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &stdout,
-		Stderr: &stderr,
-	})
+// Reload triggers a rollout restart of the FreeRADIUS deployment by patching
+// the pod template annotation, equivalent to kubectl rollout restart.
+func Reload(ctx context.Context, k8s kubernetes.Interface, namespace, deployment string) error {
+	patch := fmt.Sprintf(
+		`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":%q}}}}}`,
+		time.Now().Format(time.RFC3339),
+	)
+	_, err := k8s.AppsV1().Deployments(namespace).Patch(
+		ctx, deployment, types.StrategicMergePatchType, []byte(patch), metav1.PatchOptions{},
+	)
+	return err
 }

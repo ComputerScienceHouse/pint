@@ -1,14 +1,23 @@
 # RadSec (RADIUS over TLS, RFC 6614) virtual server.
 # Handles RADIUS authentication forwarded by home routers over a mutual-TLS
-# connection on port 2083.  Each router client is registered in clients.conf
-# with virtual_server = radsec, so FreeRADIUS routes their requests here.
+# connection on port 2083.  Each router client is registered in the radsec
+# clients section below, so FreeRADIUS routes their requests here.
+
+# Named client section associated with the RadSec TLS listener.
+# Clients here inherit TLS from the listener; no tls{} block is needed per
+# client entry.  The dynamic file is written by PINT and reloaded via SIGHUP.
+clients radsec {
+    $-INCLUDE /etc/freeradius/dynamic/clients.conf
+}
+
 server radsec {
 
     listen {
-        type   = auth+acct
-        ipaddr = *
-        port   = 2083
-        proto  = tcp
+        type    = auth
+        ipaddr  = *
+        port    = 2083
+        proto   = tcp
+        clients = radsec
 
         tls {
             # Server cert — presented to connecting routers and to EAP supplicants.

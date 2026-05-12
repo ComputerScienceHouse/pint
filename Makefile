@@ -1,10 +1,12 @@
-.PHONY: build test lint dev dev-stop dev-setup dev-cluster dev-freeradius dev-secret dev-logs dev-forward clean
+.PHONY: build test lint dev dev-stop dev-setup dev-cluster dev-freeradius dev-secret dev-logs dev-forward radsec-smoketest clean
 
-BINARY    = pint
-STUB      = freeipa-stub
-CLUSTER   = pint-dev
-NAMESPACE = pint
-FR_IMAGE  = pint-freeradius:dev
+BINARY          = pint
+STUB            = freeipa-stub
+CLUSTER         = pint-dev
+NAMESPACE       = pint
+FR_IMAGE        = pint-freeradius:dev
+SMOKETEST_IMAGE = pint-smoketest:dev
+SMOKETEST_POD   = pint-radsec-smoketest
 
 build:
 	go build -o $(BINARY) ./cmd/pint/
@@ -21,16 +23,8 @@ lint:
 # ── Local dev ──────────────────────────────────────────────────────────────────
 
 dev: build build-stub
-	@pkill -x $(STUB) 2>/dev/null || true
-	@echo "Starting FreeIPA stub on :8088..."
-	@set -a && . .env.dev && set +a && ./$(STUB) &
-	@sleep 1
-	@echo "Starting PINT on :8080..."
-	@set -a && . .env.dev && set +a && ./$(BINARY)
-
-dev-stop:
-	@pkill -x $(STUB) 2>/dev/null || true
-	@pkill -x $(BINARY) 2>/dev/null || true
+	@which overmind > /dev/null || (echo "Error: overmind not installed. Run: brew install overmind" && exit 1)
+	overmind start
 
 # ── Kubernetes dev cluster ─────────────────────────────────────────────────────
 
@@ -74,16 +68,16 @@ dev-logs:
 dev-forward:
 	kubectl port-forward -n $(NAMESPACE) service/pint-freeradius 2083:2083
 
-# ── Production Helm deploy ─────────────────────────────────────────────────────
+# ── RadSec smoke test ─────────────────────────────────────────────────────────
 
-# Upgrade or install into the current kubectl context.
-# Override values as needed:
-#   make helm-deploy HELM_ARGS="--set openshift.enabled=true --set openshift.route.host=pint.csh.rit.edu"
-helm-deploy:
-	helm upgrade --install pint chart/ \
-		--namespace $(NAMESPACE) \
-		--create-namespace \
-		$(HELM_ARGS)
+# Issues test certs via the FreeIPA stub, then runs eapol_test against FreeRADIUS
+# inside the kind cluster using radsecproxy as a UDP→RadSec bridge.
+# Requires: make dev running (stub on :8088, FreeRADIUS in cluster).
+radsec-smoketest:
+	docker build -t $(SMOKETEST_IMAGE) dev/smoketest/
+	kind load docker-image $(SMOKETEST_IMAGE) --name $(CLUSTER)
+	SMOKETEST_IMAGE=$(SMOKETEST_IMAGE) SMOKETEST_POD=$(SMOKETEST_POD) NAMESPACE=$(NAMESPACE) \
+		bash dev/smoketest/run-smoketest.sh
 
 # ── Docker build ───────────────────────────────────────────────────────────────
 

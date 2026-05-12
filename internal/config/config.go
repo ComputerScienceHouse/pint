@@ -36,7 +36,7 @@ type Config struct {
 	RadiusClientsSecret   string
 	RadiusConfigSecret    string
 	RadSecCertSecret      string // PINT_RADSEC_CERT_SECRET:K8s Secret storing FreeRADIUS TLS cert+key
-	FreeRADIUSPodSelector string
+	FreeRADIUSDeployment string
 
 	// UI
 	RadiusServer string
@@ -68,7 +68,7 @@ func Load() (*Config, error) {
 	cfg.RadiusClientsSecret = require("PINT_RADIUS_CLIENTS_SECRET")
 	cfg.RadiusConfigSecret = require("PINT_RADIUS_CONFIG_SECRET")
 	cfg.RadSecCertSecret = require("PINT_RADSEC_CERT_SECRET")
-	cfg.FreeRADIUSPodSelector = require("PINT_FREERADIUS_POD_SELECTOR")
+	cfg.FreeRADIUSDeployment = require("PINT_FREERADIUS_DEPLOYMENT")
 	cfg.RadiusServer = require("PINT_RADIUS_SERVER")
 
 	if len(missing) > 0 {

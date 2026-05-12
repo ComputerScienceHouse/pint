@@ -43,8 +43,8 @@ spec:
             - name: PINT_RADSEC_CERT_SECRET
               value: {{ .Values.secrets.radSecCert | quote }}
             {{- if .Values.freeradius.enabled }}
-            - name: PINT_FREERADIUS_POD_SELECTOR
-              value: {{ include "pint.freeradiusPodSelector" . | quote }}
+            - name: PINT_FREERADIUS_DEPLOYMENT
+              value: {{ include "pint.freeradiusFullname" . | quote }}
             {{- end }}
           livenessProbe:
             httpGet:

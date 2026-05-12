@@ -67,6 +67,12 @@ freeradius:
   service:
     type: LoadBalancer
     nodePort: null  # only used when type=NodePort
+  checkCRL: true
+  securityContext:
+    runAsNonRoot: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
 
 # OpenShift-specific resources.
 openshift:

@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"github.com/ComputerScienceHouse/pint/internal/radius"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/rest"
 )
 
 func TestWriteRadiusConfig(t *testing.T) {
@@ -76,43 +76,36 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	}
 }
 
-func TestReload_NoPodFound(t *testing.T) {
+func TestReload_DeploymentNotFound(t *testing.T) {
 	ctx := context.Background()
 	k8s := fake.NewSimpleClientset()
-	restCfg := &rest.Config{Host: "https://fake"}
 
-	err := radius.Reload(ctx, k8s, restCfg, "default", "app=freeradius")
+	err := radius.Reload(ctx, k8s, "default", "pint-freeradius")
 	if err == nil {
-		t.Fatal("expected error when no FreeRADIUS pod found")
+		t.Fatal("expected error when deployment not found")
 	}
 }
 
-func TestReload_PodExists(t *testing.T) {
-	// The fake clientset's RESTClient panics when building exec requests (nil
-	// internal transport). Recover so we can still assert that Reload reached
-	// the exec phase (i.e., it found the pod rather than returning early).
-	podNotFound := false
-	defer func() {
-		if r := recover(); r != nil && podNotFound {
-			t.Errorf("Reload returned pod-not-found instead of finding the pod: %v", r)
-		}
-	}()
-
+func TestReload_PatchesDeployment(t *testing.T) {
 	ctx := context.Background()
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "freeradius-0",
-			Namespace: "default",
-			Labels:    map[string]string{"app": "freeradius"},
+	deploy := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "pint-freeradius", Namespace: "default"},
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{},
+			Template: corev1.PodTemplateSpec{},
 		},
-		Status: corev1.PodStatus{Phase: corev1.PodRunning},
 	}
-	k8s := fake.NewSimpleClientset(pod)
-	restCfg := &rest.Config{Host: "https://fake"}
+	k8s := fake.NewSimpleClientset(deploy)
 
-	err := radius.Reload(ctx, k8s, restCfg, "default", "app=freeradius")
-	if err != nil && err.Error() == "no FreeRADIUS pod found matching app=freeradius" {
-		podNotFound = true
-		t.Error("got pod-not-found error but pod was present")
+	if err := radius.Reload(ctx, k8s, "default", "pint-freeradius"); err != nil {
+		t.Fatalf("Reload() error: %v", err)
+	}
+
+	updated, err := k8s.AppsV1().Deployments("default").Get(ctx, "pint-freeradius", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get deployment error: %v", err)
+	}
+	if updated.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] == "" {
+		t.Error("restartedAt annotation not set on pod template")
 	}
 }
