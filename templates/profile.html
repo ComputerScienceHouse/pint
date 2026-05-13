@@ -33,12 +33,37 @@
         <span id="spinner-android" class="ml-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
     </div>
 </div>
+
+<div class="card mt-4">
+    <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-microsoft-windows"></span> Windows</strong></div>
+    <div class="card-body">
+        <ol>
+            <li>Download and install the CA certificate below (import into <em>Trusted Root Certification Authorities</em>).</li>
+            <li>Download and install the client certificate (.p12) below (import into <em>Personal</em> certificate store).</li>
+            <li>Download the WLAN profile XML and import it by running:<br>
+                <code>netsh wlan add profile filename="csh-wifi.xml"</code>
+            </li>
+        </ol>
+        <a href="/profile/ca" class="btn btn-info mr-2">
+            <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
+        </a>
+        <button class="btn btn-secondary mr-2" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
+            <span class="mdi mdi-card-account-details-outline"></span> Download Client Cert (.p12)
+        </button>
+        <span id="spinner-windows-p12" class="mr-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        <button class="btn btn-primary" onclick="downloadProfile('windows')" id="btn-windows">
+            <span class="mdi mdi-download"></span> Download WLAN Profile (.xml)
+        </button>
+        <span id="spinner-windows" class="ml-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+    </div>
+</div>
 {{end}}
 {{define "scripts"}}
 <script>
-function downloadProfile(platform) {
-    const btn = document.getElementById('btn-' + platform);
-    const spinner = document.getElementById('spinner-' + platform);
+function downloadProfile(platform, btnId) {
+    const id = btnId || platform;
+    const btn = document.getElementById('btn-' + id);
+    const spinner = document.getElementById('spinner-' + id);
     btn.disabled = true;
     spinner.style.display = 'inline';
 

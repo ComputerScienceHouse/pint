@@ -23,18 +23,34 @@ func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
-// GenerateProfileHandler serves POST /profile/generate?platform=ios|android.
+// GenerateProfileHandler serves POST /profile/generate?platform=ios|android|windows.
 func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		platform := c.Query("platform")
-		if platform != "ios" && platform != "android" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "platform must be ios or android"})
+		if platform != "ios" && platform != "android" && platform != "windows" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "platform must be ios, android, or windows"})
 			return
 		}
 
 		username, ok := getUsername(c)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+
+		if platform == "windows" {
+			radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
+			wlan, err := profile.BuildWLANProfile(profile.WLANProfileParams{
+				SSID:       cfg.WiFiSSID,
+				RadiusHost: radiusHost,
+				CACertDER:  caDER,
+			})
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "WLAN profile build failed"})
+				return
+			}
+			c.Header("Content-Disposition", `attachment; filename="csh-wifi.xml"`)
+			c.Data(http.StatusOK, "application/xml", wlan)
 			return
 		}
 
