@@ -18,7 +18,7 @@ type Config struct {
 	IPAHost                 string
 	IPAServiceAccount       string
 	IPAPassword             string
-	IPACAName               string
+	IPAWirelessCAName       string
 	RadSecCAName            string // PINT_IPA_RADSEC_CA_NAME:FreeIPA intermediate CA for RadSec certs
 	RootCAName              string // PINT_IPA_ROOT_CA_NAME:signing root CA; defaults to "ipa"
 	IPACertProfile          string // PINT_IPA_CERT_PROFILE:FreeIPA profile for WiFi client certs (optional)
@@ -40,6 +40,9 @@ type Config struct {
 
 	// UI
 	RadiusServer string
+
+	// Dev
+	DisableOIDC bool // PINT_DISABLE_OIDC: skip OIDC and inject a static dev user
 }
 
 func Load() (*Config, error) {
@@ -54,27 +57,35 @@ func Load() (*Config, error) {
 		return v
 	}
 
+	optional := func(key, def string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return def
+	}
+
 	cfg.ClientID = require("PINT_CLIENT_ID")
 	cfg.ClientSecret = require("PINT_CLIENT_SECRET")
 	cfg.ServerURL = require("PINT_SERVER_URL")
 	cfg.IPAHost = require("PINT_IPA_HOST")
 	cfg.IPAServiceAccount = require("PINT_IPA_SERVICE_ACCOUNT")
 	cfg.IPAPassword = require("PINT_IPA_PASSWORD")
-	cfg.IPACAName = require("PINT_IPA_CA_NAME")
-	cfg.RadSecCAName = require("PINT_IPA_RADSEC_CA_NAME")
+	cfg.IPAWirelessCAName = optional("PINT_IPA_WIRELESS_CA_NAME", "wireless")
+	cfg.RadSecCAName = optional("PINT_IPA_RADSEC_CA_NAME", "radsec")
 	cfg.WiFiSSID = require("PINT_WIFI_SSID")
 
-	cfg.Namespace = require("PINT_NAMESPACE")
-	cfg.RadiusClientsSecret = require("PINT_RADIUS_CLIENTS_SECRET")
-	cfg.RadiusConfigSecret = require("PINT_RADIUS_CONFIG_SECRET")
-	cfg.RadSecCertSecret = require("PINT_RADSEC_CERT_SECRET")
-	cfg.FreeRADIUSDeployment = require("PINT_FREERADIUS_DEPLOYMENT")
+	cfg.Namespace = optional("PINT_NAMESPACE", "pint")
+	cfg.RadiusClientsSecret = optional("PINT_RADIUS_CLIENTS_SECRET", "pint-radius-clients")
+	cfg.RadiusConfigSecret = optional("PINT_RADIUS_CONFIG_SECRET", "pint-radius-config")
+	cfg.RadSecCertSecret = optional("PINT_RADSEC_CERT_SECRET", "pint-radsec-server")
+	cfg.FreeRADIUSDeployment = optional("PINT_FREERADIUS_DEPLOYMENT", "pint-freeradius")
 	cfg.RadiusServer = require("PINT_RADIUS_SERVER")
 
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required environment variables: %v", missing)
 	}
 
+	cfg.DisableOIDC = os.Getenv("PINT_DISABLE_OIDC") == "true"
 	cfg.IPASkipTLSVerify = os.Getenv("PINT_IPA_SKIP_TLS_VERIFY") == "true"
 	cfg.RootCAName = os.Getenv("PINT_IPA_ROOT_CA_NAME")
 	if cfg.RootCAName == "" {

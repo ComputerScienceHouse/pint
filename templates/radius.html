@@ -40,14 +40,12 @@
         <div class="input-group mb-4">
           <input type="password" id="shared-key" class="form-control" style="font-family: monospace;"
                  value="{{.Client.Secret}}" readonly>
-          <div class="input-group-append">
-            <button class="btn btn-secondary" type="button" onclick="toggleField('shared-key', this)" title="Show / Hide">
-              <span class="mdi mdi-eye"></span>
-            </button>
-            <button class="btn btn-secondary" type="button" onclick="copyInput('shared-key', this)" title="Copy">
-              <span class="mdi mdi-content-copy"></span>
-            </button>
-          </div>
+          <button class="btn btn-secondary" type="button" onclick="toggleField('shared-key', this)" title="Show / Hide">
+            <span class="mdi mdi-eye"></span>
+          </button>
+          <button class="btn btn-secondary" type="button" onclick="copyInput('shared-key', this)" title="Copy">
+            <span class="mdi mdi-content-copy"></span>
+          </button>
         </div>
 
         <hr>
@@ -57,11 +55,9 @@
         {{if .KeyPEM}}
         <div class="input-group align-items-start mb-4">
           <textarea id="field-key" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.KeyPEM}}</textarea>
-          <div class="input-group-append">
-            <button class="btn btn-secondary" type="button" onclick="copyTA('field-key', this)" title="Copy">
-              <span class="mdi mdi-content-copy"></span>
-            </button>
-          </div>
+          <button class="btn btn-secondary" type="button" onclick="copyTA('field-key', this)" title="Copy">
+            <span class="mdi mdi-content-copy"></span>
+          </button>
         </div>
         {{else}}
         <div class="alert alert-warning mb-4">
@@ -74,33 +70,33 @@
         <!-- Certificate -->
         <h6><span class="mdi mdi-certificate"></span> Certificate</h6>
         {{if .Client.CertSerial}}
-        <table class="table table-sm table-bordered mb-3">
-          <tbody>
-            <tr><th class="w-25">Subject</th><td><code>{{.Client.CertSubject}}</code></td></tr>
-            <tr><th>Issuer</th><td><code>{{.Client.CertIssuer}}</code></td></tr>
-            <tr><th>Serial</th><td><code>{{.Client.CertSerial}}</code></td></tr>
-            <tr><th>Valid From</th><td>{{.Client.CertNotBefore}}</td></tr>
-            <tr><th>Expires</th><td>{{.Client.CertNotAfter}}</td></tr>
-            {{if .Client.CertKeyBits}}
-            <tr><th>Key</th><td>RSA {{.Client.CertKeyBits}}-bit</td></tr>
-            {{end}}
-            {{if .Client.CertEKUs}}
-            <tr>
-              <th>Extended Key Usage</th>
-              <td>{{range .Client.CertEKUs}}<span class="badge badge-secondary mr-1">{{.}}</span>{{end}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+        <dl class="row mb-3">
+          <dt class="col-sm-4 fw-normal text-muted">Subject</dt>
+          <dd class="col-sm-8"><code>{{.Client.CertSubject}}</code></dd>
+          <dt class="col-sm-4 fw-normal text-muted">Issuer</dt>
+          <dd class="col-sm-8"><code>{{.Client.CertIssuer}}</code></dd>
+          <dt class="col-sm-4 fw-normal text-muted">Serial</dt>
+          <dd class="col-sm-8"><code>{{.Client.CertSerial}}</code></dd>
+          <dt class="col-sm-4 fw-normal text-muted">Valid From</dt>
+          <dd class="col-sm-8">{{.Client.CertNotBefore}}</dd>
+          <dt class="col-sm-4 fw-normal text-muted">Expires</dt>
+          <dd class="col-sm-8">{{.Client.CertNotAfter}}</dd>
+          {{if .Client.CertKeyBits}}
+          <dt class="col-sm-4 fw-normal text-muted">Key</dt>
+          <dd class="col-sm-8">RSA {{.Client.CertKeyBits}}-bit</dd>
+          {{end}}
+          {{if .Client.CertEKUs}}
+          <dt class="col-sm-4 fw-normal text-muted">Extended Key Usage</dt>
+          <dd class="col-sm-8 mb-0">{{range .Client.CertEKUs}}<span class="badge bg-secondary me-1">{{.}}</span>{{end}}</dd>
+          {{end}}
+        </dl>
         {{end}}
         {{if .CertPEM}}
         <div class="input-group align-items-start mb-4">
           <textarea id="field-cert" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.CertPEM}}</textarea>
-          <div class="input-group-append">
-            <button class="btn btn-secondary" type="button" onclick="copyTA('field-cert', this)" title="Copy">
-              <span class="mdi mdi-content-copy"></span>
-            </button>
-          </div>
+          <button class="btn btn-secondary" type="button" onclick="copyTA('field-cert', this)" title="Copy">
+            <span class="mdi mdi-content-copy"></span>
+          </button>
         </div>
         {{end}}
 
@@ -110,11 +106,9 @@
         <h6><span class="mdi mdi-certificate-outline"></span> CA Chain</h6>
         <div class="input-group align-items-start">
           <textarea id="field-ca" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.CACertPEM}}</textarea>
-          <div class="input-group-append">
-            <button class="btn btn-secondary" type="button" onclick="copyTA('field-ca', this)" title="Copy">
-              <span class="mdi mdi-content-copy"></span>
-            </button>
-          </div>
+          <button class="btn btn-secondary" type="button" onclick="copyTA('field-ca', this)" title="Copy">
+            <span class="mdi mdi-content-copy"></span>
+          </button>
         </div>
 
       </div>
@@ -126,17 +120,18 @@
   <div class="col-lg-4">
     <div class="card sticky-top" style="top: 1rem;">
       <div class="card-header bg-primary text-white"><strong>Actions</strong></div>
-      <div class="card-body">
-        <button type="button" class="btn btn-success btn-block mb-2"
-                data-toggle="modal" data-target="#updateIPModal">
+      <div class="card-body d-grid gap-2">
+        <button type="button" class="btn btn-success"
+                data-bs-toggle="modal" data-bs-target="#updateIPModal">
           <span class="mdi mdi-ip-network"></span> Update Source IP
         </button>
-        <button type="button" class="btn btn-warning btn-block mb-2"
-                data-toggle="modal" data-target="#renewModal">
+        <button type="button" class="btn btn-warning"
+                data-bs-toggle="modal" data-bs-target="#renewModal">
           <span class="mdi mdi-autorenew"></span> Renew or Reissue Key Pair
         </button>
-        <button type="button" class="btn btn-danger btn-block"
-                data-toggle="modal" data-target="#unenrollModal">
+        <hr class="my-1">
+        <button type="button" class="btn btn-outline-danger"
+                data-bs-toggle="modal" data-bs-target="#unenrollModal">
           <span class="mdi mdi-delete-outline"></span> Unenroll RADIUS Client
         </button>
       </div>
@@ -146,28 +141,26 @@
 </div><!-- /row -->
 
 <!-- Update IP Modal -->
-<div class="modal fade" id="updateIPModal" tabindex="-1" role="dialog" aria-labelledby="updateIPModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+<div class="modal fade" id="updateIPModal" tabindex="-1" aria-labelledby="updateIPModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="updateIPModalLabel">Update Source IP</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="POST" action="/radius/update-ip">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
           <p class="text-muted">Set the IP address or CIDR your router connects from. Leave blank to allow from any IP.</p>
-          <div class="form-group mb-0">
-            <label for="modal-ip-cidr">Source IP / CIDR</label>
+          <div class="mb-0">
+            <label for="modal-ip-cidr" class="form-label">Source IP / CIDR</label>
             <input type="text" class="form-control" id="modal-ip-cidr" name="ip_cidr"
                    placeholder="e.g. 203.0.113.42 or 203.0.113.0/24"
                    value="{{.IPCIDR}}">
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-success">Update</button>
         </div>
       </form>
@@ -176,14 +169,12 @@
 </div>
 
 <!-- Renew / Reissue Modal -->
-<div class="modal fade" id="renewModal" tabindex="-1" role="dialog" aria-labelledby="renewModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+<div class="modal fade" id="renewModal" tabindex="-1" aria-labelledby="renewModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="renewModalLabel">Renew or Reissue Key Pair</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="POST" action="/radius/regenerate">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -192,7 +183,7 @@
           <p class="text-warning mb-0"><strong>Your router will lose access to CSH WiFi until you update it with the new credentials.</strong> Your source IP setting will be preserved.</p>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-warning">Renew Key Pair</button>
         </div>
       </form>
@@ -201,14 +192,12 @@
 </div>
 
 <!-- Unenroll Modal -->
-<div class="modal fade" id="unenrollModal" tabindex="-1" role="dialog" aria-labelledby="unenrollModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
+<div class="modal fade" id="unenrollModal" tabindex="-1" aria-labelledby="unenrollModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title" id="unenrollModalLabel">Unenroll RADIUS Client</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form method="POST" action="/radius/delete">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
@@ -217,7 +206,7 @@
           <p class="text-danger mb-0"><strong>Your home router will immediately stop accepting CSH WiFi logins.</strong> You can re-enroll at any time by returning to this page.</p>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn btn-danger">Unenroll</button>
         </div>
       </form>
@@ -241,11 +230,11 @@
     <p>Broadcast the CSH WiFi SSID from your home router. PINT will generate a shared secret, private key, and client certificate so your router can authenticate users against the CSH RADIUS server.</p>
     <form method="POST" action="/radius/secret">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <div class="form-group">
-        <label for="ip_cidr">Source IP / CIDR <span class="text-muted">(recommended)</span></label>
+      <div class="mb-3">
+        <label for="ip_cidr" class="form-label">Source IP / CIDR <span class="text-muted">(recommended)</span></label>
         <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
                placeholder="e.g. 203.0.113.42 or 203.0.113.0/24">
-        <small class="form-text text-muted">Your router's external IP or subnet. Leave blank to allow from any IP (not recommended).</small>
+        <div class="form-text">Your router's external IP or subnet. Leave blank to allow from any IP (not recommended).</div>
       </div>
       <button type="submit" class="btn btn-primary"><span class="mdi mdi-key-plus"></span> Generate Credentials</button>
     </form>
@@ -270,12 +259,10 @@ function toggleField(id, btn) {
 
 function flashCopied(btn) {
   var icon = btn.querySelector('.mdi');
-  btn.classList.remove('btn-secondary');
-  btn.classList.add('btn-success');
+  btn.classList.replace('btn-secondary', 'btn-success');
   if (icon) icon.classList.replace('mdi-content-copy', 'mdi-check');
   setTimeout(function() {
-    btn.classList.remove('btn-success');
-    btn.classList.add('btn-secondary');
+    btn.classList.replace('btn-success', 'btn-secondary');
     if (icon) icon.classList.replace('mdi-check', 'mdi-content-copy');
   }, 1500);
 }

@@ -2,26 +2,33 @@
 {{template "layout.html" .}}
 {{define "title"}}Dashboard | PINT{{end}}
 {{define "content"}}
-<h2 class="mb-4"><span class="mdi mdi-hand-wave"></span> Welcome, {{if .FullName}}{{.FullName}}{{else}}{{.Username}}{{end}}!</h2>
+<h2 class="mb-4">Welcome, {{if .FullName}}{{.FullName}}{{else}}{{.Username}}{{end}}!</h2>
 
-<div class="card bg-info text-white mb-4">
-    <div class="card-body" style="padding: 2.25rem 2.5rem;">
-        <div class="d-flex align-items-center mb-3">
-            <span class="mdi mdi-wifi mr-3" style="font-size: 2.5rem; line-height: 1;"></span>
-            <h4 class="mb-0" style="font-weight: 700;">Connect to CSH WiFi</h4>
+<div class="card bg-info text-white mb-3">
+    <div class="card-body p-4">
+        <div class="d-flex gap-3 align-items-start">
+            <span class="mdi mdi-wifi flex-shrink-0 mt-1" style="font-size: 2rem; line-height: 1;"></span>
+            <div>
+                <h4 class="fw-bold mb-2">Connect to CSH WiFi</h4>
+                <p class="mb-3" style="font-size: 1.05rem;">
+                    Pour a pint and get connected by downloading your personal EAP-TLS certificate profile for iOS, macOS, or Android.
+                </p>
+                <a href="/profile" class="btn btn-success btn-lg"><span class="mdi mdi-arrow-right me-1"></span> Get Connected</a>
+            </div>
         </div>
-        <p class="mb-4" style="font-size: 1.05rem; opacity: 0.9;">
-            Pour a pint and get connected by downloading your personal EAP-TLS certificate profile for iOS, macOS, or Android.
-        </p>
-        <a href="/profile" class="btn btn-success btn-lg"><span class="mdi mdi-arrow-right mr-1"></span> Get Connected</a>
     </div>
 </div>
 
 <div class="card mb-4">
-    <div class="card-body" style="padding: 1.5rem;">
-        <h5 class="card-title"><span class="mdi mdi-router-wireless"></span> Deploy CSH WiFi at Home</h5>
-        <p class="card-text mb-3">Broadcast the CSH WiFi SSID from your home router using your own RADIUS credentials.</p>
-        <a href="/radius" class="btn btn-secondary"><span class="mdi mdi-cog-outline mr-1"></span> Configure Home Deployment</a>
+    <div class="card-body p-4">
+        <div class="d-flex gap-3 align-items-start">
+            <span class="mdi mdi-router-wireless text-primary flex-shrink-0 mt-1" style="font-size: 2rem; line-height: 1;"></span>
+            <div>
+                <h5 class="mb-1">Deploy CSH WiFi at Home</h5>
+                <p class="text-muted mb-3">Broadcast the CSH WiFi SSID from your home router using your own RADIUS credentials.</p>
+                <a href="/radius" class="btn btn-primary btn-sm"><span class="mdi mdi-cog-outline me-1"></span> Configure Home Deployment</a>
+            </div>
+        </div>
     </div>
 </div>
 {{end}}

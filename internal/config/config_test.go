@@ -22,7 +22,7 @@ func fullEnv() map[string]string {
 		"PINT_IPA_HOST":                "ipa.example.com",
 		"PINT_IPA_SERVICE_ACCOUNT":     "pint",
 		"PINT_IPA_PASSWORD":            "hunter2",
-		"PINT_IPA_CA_NAME":        "ipa",
+		"PINT_IPA_WIRELESS_CA_NAME": "ipa",
 		"PINT_IPA_RADSEC_CA_NAME": "radsec",
 		"PINT_IPA_SKIP_TLS_VERIFY":     "false",
 		"PINT_WIFI_SSID":               "TestNet",

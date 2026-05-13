@@ -3,58 +3,75 @@
 {{define "title"}}WiFi Profile | PINT{{end}}
 {{define "content"}}
 <h2><span class="mdi mdi-wifi-lock"></span> Your WiFi Profile</h2>
-<p class="text-muted">Certificates are generated fresh on each download and are valid for 5 years.</p>
+<p class="text-muted mb-4">Certificates are generated fresh on each download and are valid for 5 years.</p>
 
-<div class="card mt-4">
-    <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-apple"></span> iOS &amp; macOS</strong></div>
+<div class="card mt-3">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <strong><span class="mdi mdi-apple"></span> iOS &amp; macOS</strong>
+        <span class="badge bg-white text-primary">Recommended</span>
+    </div>
     <div class="card-body">
-        <p>Opens directly in Settings. Tap install to connect automatically.</p>
-        <button class="btn btn-primary" onclick="downloadProfile('ios')" id="btn-ios">
-            <span class="mdi mdi-download"></span> Download .mobileconfig
-        </button>
-        <span id="spinner-ios" class="ml-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        <p class="mb-3">Opens directly in Settings. Tap install to connect automatically.</p>
+        <div class="d-flex align-items-center gap-3">
+            <button class="btn btn-primary" onclick="downloadProfile('ios')" id="btn-ios">
+                <span class="mdi mdi-download"></span> Download .mobileconfig
+            </button>
+            <span id="spinner-ios" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        </div>
+        <div id="error-ios" class="text-danger small mt-2" style="display:none;"></div>
     </div>
 </div>
 
-<div class="card mt-4">
-    <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-android"></span> Android</strong></div>
+<div class="card mt-3">
+    <div class="card-header platform-header-alt" style="border-bottom-color: var(--bs-success);">
+        <strong class="text-success"><span class="mdi mdi-android"></span> Android</strong>
+    </div>
     <div class="card-body">
-        <ol>
+        <ol class="mb-3">
             <li>Download and install the CA certificate below.</li>
             <li>Download and install the .p12 client certificate.</li>
             <li>Go to WiFi settings → Add network → select <strong>{{.SSID}}</strong> → EAP-TLS → choose your certificate.</li>
         </ol>
-        <a href="/profile/ca" class="btn btn-info mr-2">
-            <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
-        </a>
-        <button class="btn btn-primary" onclick="downloadProfile('android')" id="btn-android">
-            <span class="mdi mdi-download"></span> Download Client Cert (.p12)
-        </button>
-        <span id="spinner-android" class="ml-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <a href="/profile/ca" class="btn btn-outline-success">
+                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
+            </a>
+            <button class="btn btn-success" onclick="downloadProfile('android')" id="btn-android">
+                <span class="mdi mdi-download"></span> Download Client Cert (.p12)
+            </button>
+            <span id="spinner-android" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        </div>
+        <div id="error-android" class="text-danger small mt-2" style="display:none;"></div>
     </div>
 </div>
 
-<div class="card mt-4">
-    <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-microsoft-windows"></span> Windows</strong></div>
+<div class="card mt-3">
+    <div class="card-header platform-header-alt" style="border-bottom-color: var(--bs-secondary);">
+        <strong class="text-secondary"><span class="mdi mdi-microsoft-windows"></span> Windows</strong>
+    </div>
     <div class="card-body">
-        <ol>
+        <ol class="mb-3">
             <li>Download and install the CA certificate below (import into <em>Trusted Root Certification Authorities</em>).</li>
             <li>Download and install the client certificate (.p12) below (import into <em>Personal</em> certificate store).</li>
             <li>Download the WLAN profile XML and import it by running:<br>
                 <code>netsh wlan add profile filename="csh-wifi.xml"</code>
             </li>
         </ol>
-        <a href="/profile/ca" class="btn btn-info mr-2">
-            <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
-        </a>
-        <button class="btn btn-secondary mr-2" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
-            <span class="mdi mdi-card-account-details-outline"></span> Download Client Cert (.p12)
-        </button>
-        <span id="spinner-windows-p12" class="mr-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
-        <button class="btn btn-primary" onclick="downloadProfile('windows')" id="btn-windows">
-            <span class="mdi mdi-download"></span> Download WLAN Profile (.xml)
-        </button>
-        <span id="spinner-windows" class="ml-2" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <a href="/profile/ca" class="btn btn-outline-secondary">
+                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
+            </a>
+            <button class="btn btn-secondary" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
+                <span class="mdi mdi-card-account-details-outline"></span> Download Client Cert (.p12)
+            </button>
+            <span id="spinner-windows-p12" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+            <button class="btn btn-secondary" onclick="downloadProfile('windows')" id="btn-windows">
+                <span class="mdi mdi-download"></span> Download WLAN Profile (.xml)
+            </button>
+            <span id="spinner-windows" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        </div>
+        <div id="error-windows-p12" class="text-danger small mt-2" style="display:none;"></div>
+        <div id="error-windows" class="text-danger small mt-2" style="display:none;"></div>
     </div>
 </div>
 {{end}}
@@ -64,15 +81,18 @@ function downloadProfile(platform, btnId) {
     const id = btnId || platform;
     const btn = document.getElementById('btn-' + id);
     const spinner = document.getElementById('spinner-' + id);
+    const errorEl = document.getElementById('error-' + id);
+
     btn.disabled = true;
     spinner.style.display = 'inline';
+    if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
 
     fetch('/profile/generate?platform=' + platform, {
             method: 'POST',
             headers: {'X-CSRF-Token': '{{.CSRFToken}}'},
         })
         .then(r => {
-            if (!r.ok) throw new Error('Generation failed: ' + r.status);
+            if (!r.ok) throw new Error('Generation failed (' + r.status + '). Please try again.');
             const cd = r.headers.get('Content-Disposition') || '';
             const match = cd.match(/filename="?([^"]+)"?/);
             const filename = match ? match[1] : 'csh-wifi.' + platform;
@@ -85,11 +105,25 @@ function downloadProfile(platform, btnId) {
             a.download = filename;
             a.click();
             URL.revokeObjectURL(url);
-        })
-        .catch(err => alert(err.message))
-        .finally(() => {
-            btn.disabled = false;
             spinner.style.display = 'none';
+            const origHTML = btn.innerHTML;
+            const origClass = btn.className;
+            btn.innerHTML = '<span class="mdi mdi-check"></span> Downloaded!';
+            btn.classList.remove('btn-primary', 'btn-secondary', 'btn-info', 'btn-success');
+            btn.classList.add('btn-success');
+            setTimeout(() => {
+                btn.innerHTML = origHTML;
+                btn.className = origClass;
+                btn.disabled = false;
+            }, 2500);
+        })
+        .catch(err => {
+            spinner.style.display = 'none';
+            btn.disabled = false;
+            if (errorEl) {
+                errorEl.textContent = err.message;
+                errorEl.style.display = 'block';
+            }
         });
 }
 </script>

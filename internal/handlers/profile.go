@@ -60,7 +60,7 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 			return
 		}
 
-		certDER, err := ipaClient.CertRequest(username, string(csrPEM), cfg.IPACAName, cfg.IPACertProfile)
+		certDER, err := ipaClient.CertRequest(username, string(csrPEM), cfg.IPAWirelessCAName, cfg.IPACertProfile)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("cert request failed: %v", err)})
 			return

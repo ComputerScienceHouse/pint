@@ -48,6 +48,18 @@ func getUsername(c *gin.Context) (string, bool) {
 	return info.Username, ok
 }
 
+// DevAuthMiddleware injects a static *cshauth.Claims for local development.
+// Enabled via PINT_DISABLE_OIDC=true; never use in production.
+func DevAuthMiddleware() gin.HandlerFunc {
+	claims := &cshauth.Claims{}
+	claims.Username = "devuser"
+	claims.FullName = "Dev User"
+	return func(c *gin.Context) {
+		c.Set(cshauth.ContextKey, claims)
+		c.Next()
+	}
+}
+
 // RequireAuth aborts with a redirect to loginURL if csh-auth Claims are not in context.
 // Use this after CookieMiddleware on any route group that must be authenticated.
 func RequireAuth(loginURL string) gin.HandlerFunc {

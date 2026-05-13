@@ -32,12 +32,12 @@ type caEntry struct {
 }
 
 // caStore maps FreeIPA CA names to their intermediate CA entries.
-// Keys match PINT_IPA_CA_NAME and PINT_IPA_RADSEC_CA_NAME in .env.dev.
+// Keys match PINT_IPA_WIRELESS_CA_NAME and PINT_IPA_RADSEC_CA_NAME in .env.dev.
 var caStore map[string]*caEntry
 
 func main() {
 	dataDir := flag.String("data", "dev/freeipa-stub/data", "directory to persist CA keys and certs")
-	wifiCAName := flag.String("wifi-ca", getEnv("PINT_IPA_CA_NAME", "ipa"), "FreeIPA CA name for WiFi certs (PINT_IPA_CA_NAME)")
+	wifiCAName := flag.String("wifi-ca", getEnv("PINT_IPA_WIRELESS_CA_NAME", "wireless"), "FreeIPA CA name for WiFi certs (PINT_IPA_WIRELESS_CA_NAME)")
 	radSecCAName := flag.String("radsec-ca", getEnv("PINT_IPA_RADSEC_CA_NAME", "radsec"), "FreeIPA CA name for RadSec certs (PINT_IPA_RADSEC_CA_NAME)")
 	rootCAName := flag.String("root-ca", getEnv("PINT_IPA_ROOT_CA_NAME", "ipa"), "FreeIPA root CA name (PINT_IPA_ROOT_CA_NAME)")
 	flag.Parse()

@@ -3,50 +3,168 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>PINT | {{block "title" .}}CSH WiFi{{end}}</title>
-    <link rel="stylesheet" href="https://s3.csh.rit.edu/csh-material-bootstrap/4.3.1/dist/csh-material-bootstrap.min.css" media="screen">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
+    <style>
+      /* ── Design tokens ──────────────────────────────────────────
+         Light values reference Bootstrap CSS vars.
+         Dark values are overridden in the media query below.     */
+      :root {
+        --pint-code-color:       var(--bs-secondary);
+        --pint-code-bg:          var(--bs-light);
+        --pint-alt-header-bg:    var(--bs-light);
+        --pint-alt-header-color: var(--bs-dark);
+        --pint-alt-header-border: var(--bs-secondary);
+        --pint-surface:          var(--bs-white);
+        --pint-surface-raised:   var(--bs-light);
+        --pint-border:           var(--bs-border-color);
+        --pint-text:             var(--bs-dark);
+        --pint-muted:            var(--bs-secondary);
+        --pint-muted-strong:     var(--bs-secondary);
+        --pint-input-bg:         var(--bs-white);
+        --pint-input-bg-ro:      var(--bs-light);
+        --pint-input-border:     var(--bs-secondary);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          /* Dark surface scale — Bootstrap 5.0 has no dark tokens */
+          --pint-body-bg:          var(--bs-gray-dark);
+          --pint-code-color:       var(--bs-secondary);
+          --pint-code-bg:          var(--bs-dark);
+          --pint-alt-header-bg:    var(--bs-dark);
+          --pint-alt-header-color: var(--bs-light);
+          --pint-alt-header-border: var(--bs-gray);
+          --pint-surface:          var(--bs-gray-dark);
+          --pint-surface-raised:   var(--bs-dark);
+          --pint-border:           rgba(var(--bs-light-rgb), .08);
+          --pint-text:             var(--bs-light);
+          --pint-muted:            var(--bs-gray);
+          --pint-muted-strong:     var(--bs-secondary);
+          --pint-input-bg:         var(--bs-dark);
+          --pint-input-bg-ro:      var(--bs-gray-dark);
+          --pint-input-border:     var(--bs-gray);
+        }
+      }
+
+      /* ── Code elements ──────────────────────────────────────────
+         Override Bootstrap 5's default pink with neutral style.  */
+      code {
+        color: var(--pint-code-color);
+        background-color: var(--pint-code-bg);
+        padding: .15em .45em;
+        border-radius: .3rem;
+        font-size: .875em;
+      }
+
+      /* ── Custom components ──────────────────────────────────── */
+      .platform-header-alt {
+        background-color: var(--pint-alt-header-bg);
+        border-bottom: 2px solid var(--pint-alt-header-border);
+        color: var(--pint-alt-header-color);
+      }
+
+      /* ── Navbar subtitle ────────────────────────────────────── */
+      .navbar-subtitle {
+        font-size: .65em;
+        opacity: .85;
+        line-height: 1;
+        margin-top: -1px;
+        letter-spacing: .01em;
+      }
+
+      /* ── Dark mode surface overrides ────────────────────────── */
+      @media (prefers-color-scheme: dark) {
+        body { background-color: var(--pint-body-bg); color: var(--pint-text); }
+
+        .card { background-color: var(--pint-surface); border-color: var(--pint-border); }
+
+        code { color: var(--pint-code-color); background-color: var(--pint-code-bg); }
+
+        .form-control, textarea.form-control {
+          background-color: var(--pint-input-bg);
+          border-color: var(--pint-input-border);
+          color: var(--pint-text);
+        }
+        .form-control[readonly], textarea.form-control[readonly] {
+          background-color: var(--pint-input-bg-ro);
+        }
+        .form-control:focus {
+          background-color: var(--pint-input-bg);
+          color: var(--pint-text);
+          border-color: var(--bs-primary);
+          box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .25);
+        }
+
+        .input-group > .btn-secondary {
+          background-color: var(--pint-input-bg);
+          border-color: var(--pint-input-border);
+          color: var(--pint-text);
+        }
+        .input-group > .btn-secondary:hover { background-color: var(--pint-surface-raised); }
+
+        .table { color: var(--pint-text); }
+        .table-bordered > :not(caption) > * > * { border-color: var(--pint-border); }
+        .table > :not(:first-child) { border-top-color: var(--pint-border); }
+
+        .modal-content { background-color: var(--pint-surface); color: var(--pint-text); border-color: var(--pint-border); }
+        .modal-header, .modal-footer { border-color: var(--pint-border); }
+        .btn-close { filter: invert(1) grayscale(100%) brightness(200%); }
+
+        .dropdown-menu { background-color: var(--pint-surface); border-color: var(--pint-border); }
+        .dropdown-item { color: var(--pint-text); }
+        .dropdown-item:hover, .dropdown-item:focus { background-color: var(--pint-surface-raised); color: var(--bs-white); }
+
+        .alert-warning {
+          background-color: rgba(var(--bs-warning-rgb), .1);
+          border-color: rgba(var(--bs-warning-rgb), .25);
+          color: var(--bs-warning);
+        }
+
+        hr { border-color: var(--pint-border); opacity: 1; }
+        .text-muted { color: var(--pint-muted) !important; }
+      }
+    </style>
 </head>
 <body>
 <nav class="navbar navbar-expand-sm navbar-dark bg-primary">
     <div class="container">
         <a class="navbar-brand" href="/">
             <span class="mdi mdi-beer"></span> PINT
-            <div style="font-size: 0.6em; opacity: 0.75; line-height: 1; margin-top: -2px;">Pouring IPA for Network Trust</div>
+            <div class="navbar-subtitle">Pouring IPA for Network Trust</div>
         </a>
         {{if .Username}}
-        <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarUser"
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarUser"
                 aria-controls="navbarUser" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarUser">
-            <ul class="navbar-nav ml-auto">
+            <ul class="navbar-nav ms-auto">
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#"
                        id="navUserDropdown" role="button"
-                       data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        <img src="{{.AvatarURL}}" class="rounded-circle mr-2"
+                       data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="{{.AvatarURL}}" class="rounded-circle me-2"
                              width="28" height="28" alt="{{.Username}}">
                         {{if .FullName}}{{.FullName}}{{else}}{{.Username}}{{end}}
                     </a>
-                    <div class="dropdown-menu dropdown-menu-right" aria-labelledby="navUserDropdown">
-                        <a class="dropdown-item" href="/auth/logout">
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navUserDropdown">
+                        <li><a class="dropdown-item" href="/auth/logout">
                             <span class="mdi mdi-logout"></span> Logout
-                        </a>
-                    </div>
+                        </a></li>
+                    </ul>
                 </li>
             </ul>
         </div>
         {{end}}
     </div>
 </nav>
-<div class="container mt-4">
+<div class="container mt-4 mb-5">
     {{block "content" .}}{{end}}
 </div>
-<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
-<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-kenU1KFdBIe4zVF0s0G1M5b4hcpxyD9F7jL+jjXkk+Q2h455rYXK/7HAuoJl+0I4" crossorigin="anonymous"></script>
 {{block "scripts" .}}{{end}}
 </body>
 </html>

@@ -36,18 +36,18 @@ func testAuth(username string) gin.HandlerFunc {
 
 
 func TestIndexHandler(t *testing.T) {
+	const loginURL = "http://localhost:8080/auth/login"
 	r := gin.New()
-	r.HTMLRender = testTemplates()
-	r.GET("/", handlers.IndexHandler())
+	r.GET("/", handlers.IndexHandler(loginURL))
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
 
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", w.Code)
+	if w.Code != http.StatusFound {
+		t.Errorf("status = %d, want 302", w.Code)
 	}
-	if !strings.Contains(w.Body.String(), "PINT") {
-		t.Error("index page missing PINT title")
+	if loc := w.Header().Get("Location"); loc != loginURL {
+		t.Errorf("Location = %q, want %q", loc, loginURL)
 	}
 }
 

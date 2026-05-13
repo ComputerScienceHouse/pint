@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"net/http"
 	"sync"
 	"time"
 
@@ -66,7 +67,7 @@ func main() {
 	)
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go func() { defer wg.Done(); caDER, certErr[0] = ipaClient.CAShow(cfg.IPACAName) }()
+	go func() { defer wg.Done(); caDER, certErr[0] = ipaClient.CAShow(cfg.IPAWirelessCAName) }()
 	go func() { defer wg.Done(); radSecCACertDER, certErr[1] = ipaClient.CAShow(cfg.RadSecCAName) }()
 	go func() { defer wg.Done(); rootCACertDER, certErr[2] = ipaClient.CAShow(cfg.RootCAName) }()
 	wg.Wait()
@@ -90,31 +91,41 @@ func main() {
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
 	go watchRadSecServerCert(k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
 
-	// csh-auth v2: package-level Init returns (Auth, error)
-	auth, err := cshauth.Init(
-		cfg.ClientID,
-		cfg.ClientSecret,
-		cfg.ServerURL,
-		cfg.LoginURL,
-		cfg.CallbackURL,
-		[]string{"openid", "profile"},
-	)
-	if err != nil {
-		log.Fatalf("csh-auth init: %v", err)
-	}
-
 	r := gin.Default()
 	r.HTMLRender = buildTemplates()
 
+	var authMiddleware gin.HandlerFunc
+	if cfg.DisableOIDC {
+		log.Printf("WARNING: OIDC disabled — injecting static dev user")
+		authMiddleware = handlers.DevAuthMiddleware()
+		r.GET("/auth/login", func(c *gin.Context) { c.Redirect(http.StatusFound, "/dashboard") })
+		r.GET("/auth/callback", func(c *gin.Context) { c.Redirect(http.StatusFound, "/dashboard") })
+		r.GET("/auth/logout", func(c *gin.Context) { c.Redirect(http.StatusFound, "/") })
+	} else {
+		// csh-auth v2: package-level Init returns (Auth, error)
+		auth, err := cshauth.Init(
+			cfg.ClientID,
+			cfg.ClientSecret,
+			cfg.ServerURL,
+			cfg.LoginURL,
+			cfg.CallbackURL,
+			[]string{"openid", "profile"},
+		)
+		if err != nil {
+			log.Fatalf("csh-auth init: %v", err)
+		}
+		authMiddleware = auth.CookieMiddleware()
+		r.GET("/auth/login", auth.HandleLogin)
+		r.GET("/auth/callback", auth.HandleCallback)
+		r.GET("/auth/logout", auth.HandleLogout)
+	}
+
 	// Public routes
-	r.GET("/", handlers.IndexHandler())
-	r.GET("/auth/login", auth.HandleLogin)
-	r.GET("/auth/callback", auth.HandleCallback)
-	r.GET("/auth/logout", auth.HandleLogout)
+	r.GET("/", handlers.IndexHandler(cfg.LoginURL))
 
 	// Protected routes
 	protected := r.Group("/")
-	protected.Use(auth.CookieMiddleware())
+	protected.Use(authMiddleware)
 	protected.Use(handlers.RequireAuth(cfg.LoginURL))
 	protected.Use(handlers.CSRFMiddleware())
 	{

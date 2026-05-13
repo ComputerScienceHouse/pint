@@ -73,7 +73,7 @@ All config is read from environment variables. Copy `.env.dev.example` to `.env.
 | `PINT_IPA_HOST` | FreeIPA host and port (e.g. `ipa.csh.rit.edu:443`) |
 | `PINT_IPA_SERVICE_ACCOUNT` | FreeIPA service account username |
 | `PINT_IPA_PASSWORD` | FreeIPA service account password |
-| `PINT_IPA_CA_NAME` | FreeIPA CA name for WiFi certs |
+| `PINT_IPA_WIRELESS_CA_NAME` | FreeIPA CA name for WiFi certs |
 | `PINT_IPA_RADSEC_CA_NAME` | FreeIPA CA name for RadSec certs |
 | `PINT_IPA_SKIP_TLS_VERIFY` | Set `true` to skip TLS verification (dev only) |
 | `PINT_WIFI_SSID` | SSID name to embed in WiFi profiles |
