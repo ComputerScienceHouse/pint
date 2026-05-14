@@ -8,6 +8,23 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 )
 
+func TestRenderRadSecTLS_CRLEnabled(t *testing.T) {
+	out := radius.RenderRadSecTLS(true)
+	if !strings.Contains(out, "check_crl      = yes") {
+		t.Error("expected check_crl = yes when checkCRL=true")
+	}
+	if !strings.Contains(out, `ecdh_curve        = "secp384r1"`) {
+		t.Error("missing secp384r1 ecdh_curve")
+	}
+}
+
+func TestRenderRadSecTLS_CRLDisabled(t *testing.T) {
+	out := radius.RenderRadSecTLS(false)
+	if !strings.Contains(out, "check_crl      = no") {
+		t.Error("expected check_crl = no when checkCRL=false")
+	}
+}
+
 func TestRenderClientsConf_WithIP(t *testing.T) {
 	ip := "192.168.1.0/24"
 	clients := []radius.RadiusClient{

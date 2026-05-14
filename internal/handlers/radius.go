@@ -2,9 +2,10 @@
 package handlers
 
 import (
-	"crypto/rsa"
+	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/pem"
+	"fmt"
 	"log"
 	"net/http"
 	"net/netip"
@@ -206,7 +207,7 @@ func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Inter
 	return "", nil
 }
 
-// issueClientCredentials generates an RSA key and RadSec client cert for username.
+// issueClientCredentials generates an EC key and RadSec client cert for username.
 // Returns the RadiusClient to store (no PEM fields), plus the one-time keyPEM and certPEM.
 // The RADIUS shared secret is always "radsec" and is not stored on the client.
 func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, username string) (*radius.RadiusClient, string, string, error) {
@@ -233,8 +234,8 @@ func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, usern
 	}
 
 	keyBits := 0
-	if rsaKey, ok := cert.PublicKey.(*rsa.PublicKey); ok {
-		keyBits = rsaKey.N.BitLen()
+	if ecKey, ok := cert.PublicKey.(*ecdsa.PublicKey); ok {
+		keyBits = ecKey.Curve.Params().BitSize
 	}
 
 	entry := &radius.RadiusClient{
@@ -249,10 +250,11 @@ func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, usern
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	keyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privKey),
-	})
+	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("marshal ec key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
 	return entry, string(keyPEM), string(certPEM), nil
 }

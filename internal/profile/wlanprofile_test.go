@@ -2,8 +2,9 @@
 package profile_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"strings"
 	"testing"
 
@@ -58,9 +59,9 @@ func TestBuildWLANProfile_ContainsExpectedElements(t *testing.T) {
 	}
 }
 
-func mustGenerateKey(t *testing.T) *rsa.PrivateKey {
+func mustGenerateKey(t *testing.T) *ecdsa.PrivateKey {
 	t.Helper()
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}

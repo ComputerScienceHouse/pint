@@ -20,12 +20,24 @@ const (
 	KeyClientsConf  = "clients.conf"
 	KeyStatusSecret = "status-secret"
 	KeyStatus       = "status"
+	KeyRadSecTLS    = "radsec-tls.conf"
 )
 
 // WriteRadiusConfig renders clients.conf from the given client list and patches
 // the clients.conf key in the named Kubernetes Secret.
 func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, clients []RadiusClient) error {
 	return patchSecretKey(ctx, k8s, namespace, secretName, KeyClientsConf, []byte(RenderClientsConf(clients)))
+}
+
+// WriteRadSecTLS renders and patches the radsec-tls.conf key in the named K8s Secret.
+// Returns (didUpdate, err). didUpdate is false when the existing value is identical.
+func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, checkCRL bool) (bool, error) {
+	rendered := RenderRadSecTLS(checkCRL)
+	existing, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err == nil && string(existing.Data[KeyRadSecTLS]) == rendered {
+		return false, nil
+	}
+	return true, patchSecretKey(ctx, k8s, namespace, secretName, KeyRadSecTLS, []byte(rendered))
 }
 
 // WriteRadSecServerCert writes all FreeRADIUS TLS material to the named K8s Secret:
@@ -55,6 +67,7 @@ func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace
 			KeyClientsConf:  []byte(RenderClientsConf(nil)),
 			KeyStatusSecret: []byte(""),
 			KeyStatus:       []byte(""),
+			KeyRadSecTLS:    []byte(RenderRadSecTLS(true)),
 		},
 	})
 }

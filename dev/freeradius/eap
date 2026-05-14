@@ -12,11 +12,11 @@ eap {
         ca_file           = /etc/pint/radsec/wifi-ca.pem
         tls_min_version   = "1.2"
         cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"
-        ecdh_curve        = "prime256v1"
+        ecdh_curve        = "secp384r1"
 
         verify {
             client_cert_ok = yes
-            check_crl      = no
+            check_crl      = yes
         }
     }
 

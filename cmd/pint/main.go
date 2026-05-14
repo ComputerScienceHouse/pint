@@ -82,6 +82,18 @@ func main() {
 			log.Printf("status config reload failed: %v", err)
 		}
 	}
+
+	tlsUpdated, err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.RadSecCheckCRL)
+	if err != nil {
+		log.Fatalf("write radsec-tls.conf: %v", err)
+	}
+	if tlsUpdated {
+		log.Printf("updated radsec-tls.conf (check_crl=%v), triggering rollout restart", cfg.RadSecCheckCRL)
+		if err := radius.Reload(context.Background(), k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
+			log.Printf("radsec tls config reload failed: %v", err)
+		}
+	}
+
 	// Fetch all three CA certs and the RadSec server cert in parallel.
 	var (
 		caDER           []byte
@@ -226,7 +238,11 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 	}
 
 	newCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privKey)})
+	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("marshal radsec ec key: %w", err)
+	}
+	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
 	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, newCertPEM, newKeyPEM, caPEM, wifiCAPEM); writeErr != nil {
 		return nil, nil, false, fmt.Errorf("write radsec cert: %w", writeErr)

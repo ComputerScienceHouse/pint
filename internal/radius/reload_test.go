@@ -3,6 +3,7 @@ package radius_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/ComputerScienceHouse/pint/internal/radius"
@@ -16,10 +17,11 @@ func newConfigSecret(ns, name string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
 		Data: map[string][]byte{
-			"clients.json":  []byte("[]"),
-			"clients.conf":  []byte(""),
-			"status-secret": []byte(""),
-			"status":        []byte(""),
+			"clients.json":   []byte("[]"),
+			"clients.conf":   []byte(""),
+			"status-secret":  []byte(""),
+			"status":         []byte(""),
+			"radsec-tls.conf": []byte(""),
 		},
 	}
 }
@@ -82,6 +84,36 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	// Call again to exercise the update path
 	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
 		t.Fatalf("WriteRadSecServerCert() update error: %v", err)
+	}
+}
+
+func TestWriteRadSecTLS_WritesAndDetectsChanges(t *testing.T) {
+	ctx := context.Background()
+	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
+
+	updated, err := radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false)
+	if err != nil {
+		t.Fatalf("WriteRadSecTLS() error: %v", err)
+	}
+	if !updated {
+		t.Error("expected updated=true on first write")
+	}
+
+	secret, err := k8s.CoreV1().Secrets("default").Get(ctx, "pint-config", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Get secret error: %v", err)
+	}
+	if !strings.Contains(string(secret.Data["radsec-tls.conf"]), "check_crl      = no") {
+		t.Error("expected check_crl = no in radsec-tls.conf")
+	}
+
+	// Second write with same value should not report updated.
+	updated, err = radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false)
+	if err != nil {
+		t.Fatalf("WriteRadSecTLS() second call error: %v", err)
+	}
+	if updated {
+		t.Error("expected updated=false when config unchanged")
 	}
 }
 

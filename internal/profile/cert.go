@@ -2,8 +2,10 @@
 package profile
 
 import (
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -12,9 +14,9 @@ import (
 	"software.sslmate.com/src/go-pkcs12"
 )
 
-// GenerateKeyAndCSR creates an RSA-2048 private key and a PEM-encoded CSR with the given CN.
-func GenerateKeyAndCSR(commonName string) (*rsa.PrivateKey, []byte, error) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+// GenerateKeyAndCSR creates a secp384r1 ECDSA private key and a PEM-encoded CSR with the given CN.
+func GenerateKeyAndCSR(commonName string) (*ecdsa.PrivateKey, []byte, error) {
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate key: %w", err)
 	}
@@ -33,7 +35,7 @@ func GenerateKeyAndCSR(commonName string) (*rsa.PrivateKey, []byte, error) {
 
 // BuildPKCS12 bundles the private key, leaf certificate DER, and CA certificate DER
 // into a PKCS#12 archive with no passphrase.
-func BuildPKCS12(key *rsa.PrivateKey, certDER, caDER []byte) ([]byte, error) {
+func BuildPKCS12(key crypto.Signer, certDER, caDER []byte) ([]byte, error) {
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
 		return nil, fmt.Errorf("parse cert: %w", err)

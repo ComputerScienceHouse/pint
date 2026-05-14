@@ -2,8 +2,9 @@
 package profile_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"math/big"
@@ -13,9 +14,9 @@ import (
 
 // StubCertAndCA is a test helper that generates a self-signed CA and a leaf cert
 // signed by it, using the provided leaf key. Returns (leafDER, caDER).
-func StubCertAndCA(t *testing.T, leafKey *rsa.PrivateKey) (leafDER, caDER []byte) {
+func StubCertAndCA(t *testing.T, leafKey *ecdsa.PrivateKey) (leafDER, caDER []byte) {
 	t.Helper()
-	caKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	caKey, _ := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	caTmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
 		Subject:               pkix.Name{CommonName: "Stub CA"},

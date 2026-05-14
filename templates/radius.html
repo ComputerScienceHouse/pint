@@ -73,7 +73,7 @@
           <dd class="col-sm-8">{{.Client.CertNotAfter}}</dd>
           {{if .Client.CertKeyBits}}
           <dt class="col-sm-4 fw-normal text-muted">Key</dt>
-          <dd class="col-sm-8">RSA {{.Client.CertKeyBits}}-bit</dd>
+          <dd class="col-sm-8">EC {{.Client.CertKeyBits}}-bit</dd>
           {{end}}
           {{if .Client.CertEKUs}}
           <dt class="col-sm-4 fw-normal text-muted">Extended Key Usage</dt>

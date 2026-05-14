@@ -321,13 +321,18 @@ func signCSR(csrPEM []byte, profileID string, ca *caEntry) ([]byte, error) {
 		}
 	}
 
+	keyUsage := x509.KeyUsageDigitalSignature
+	if profileID == profileRadSecServer {
+		keyUsage |= x509.KeyUsageKeyAgreement
+	}
+
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(serialCounter.Add(1)),
 		Subject:      csr.Subject,
 		DNSNames:     dnsNames,
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(validity),
-		KeyUsage:     x509.KeyUsageDigitalSignature,
+		KeyUsage:     keyUsage,
 		ExtKeyUsage:  []x509.ExtKeyUsage{eku},
 	}
 	return x509.CreateCertificate(rand.Reader, tmpl, ca.cert, csr.PublicKey, ca.key)

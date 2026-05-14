@@ -26,7 +26,6 @@ freeradius:
   service:
     type: NodePort
     nodePort: 32083
-  checkCRL: false
   statusServer:
     enabled: true
     clientCIDR: "0.0.0.0/0"

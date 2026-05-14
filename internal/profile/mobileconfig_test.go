@@ -2,8 +2,9 @@
 package profile_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"strings"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestBuildMobileconfig_ContainsSSID(t *testing.T) {
 }
 
 func TestBuildMobileconfig_ContainsPayloadTypes(t *testing.T) {
-	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
