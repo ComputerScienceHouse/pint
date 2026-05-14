@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"strings"
@@ -66,14 +67,13 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 			return
 		}
 
-		p12, err := profile.BuildPKCS12(privKey, certDER, caDER)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "PKCS12 build failed"})
-			return
-		}
-
 		switch platform {
 		case "ios":
+			p12, err := profile.BuildPKCS12(privKey, certDER, caDER)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "PKCS12 build failed"})
+				return
+			}
 			radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
 			mc, err := profile.BuildMobileconfig(profile.MobileconfigParams{
 				SSID:        cfg.WiFiSSID,
@@ -90,16 +90,23 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 			c.Data(http.StatusOK, "application/x-apple-aspen-config", mc)
 
 		case "android":
+			p12, err := profile.BuildPKCS12(privKey, certDER, caDER)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "PKCS12 build failed"})
+				return
+			}
 			c.Header("Content-Disposition", `attachment; filename="csh-wifi.p12"`)
 			c.Data(http.StatusOK, "application/x-pkcs12", p12)
+
 		}
 	}
 }
 
-// CAHandler serves GET /profile/ca, returns the FreeIPA CA certificate as DER.
+// CAHandler serves GET /profile/ca, returns the FreeIPA CA certificate as PEM.
 func CAHandler(caDER []byte) gin.HandlerFunc {
+	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 	return func(c *gin.Context) {
-		c.Header("Content-Disposition", `attachment; filename="csh-ca.cer"`)
-		c.Data(http.StatusOK, "application/x-x509-ca-cert", caDER)
+		c.Header("Content-Disposition", `attachment; filename="csh-ca.pem"`)
+		c.Data(http.StatusOK, "application/x-x509-ca-cert", caPEM)
 	}
 }

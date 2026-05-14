@@ -6,9 +6,8 @@
 <p class="text-muted mb-4">Certificates are generated fresh on each download and are valid for 5 years.</p>
 
 <div class="card mt-3">
-    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+    <div class="card-header bg-primary text-white">
         <strong><span class="mdi mdi-apple"></span> iOS &amp; macOS</strong>
-        <span class="badge bg-white text-primary">Recommended</span>
     </div>
     <div class="card-body">
         <p class="mb-3">Opens directly in Settings. Tap install to connect automatically.</p>
@@ -34,7 +33,7 @@
         </ol>
         <div class="d-flex align-items-center gap-3 flex-wrap">
             <a href="/profile/ca" class="btn btn-outline-success">
-                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
+                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.pem)
             </a>
             <button class="btn btn-success" onclick="downloadProfile('android')" id="btn-android">
                 <span class="mdi mdi-download"></span> Download Client Cert (.p12)
@@ -46,8 +45,8 @@
 </div>
 
 <div class="card mt-3">
-    <div class="card-header platform-header-alt" style="border-bottom-color: var(--bs-secondary);">
-        <strong class="text-secondary"><span class="mdi mdi-microsoft-windows"></span> Windows</strong>
+    <div class="card-header platform-header-alt" style="border-bottom-color: #6c757d;">
+        <strong style="color: #6c757d;"><span class="mdi mdi-microsoft-windows"></span> Windows</strong>
     </div>
     <div class="card-body">
         <ol class="mb-3">
@@ -59,7 +58,7 @@
         </ol>
         <div class="d-flex align-items-center gap-3 flex-wrap">
             <a href="/profile/ca" class="btn btn-outline-secondary">
-                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.cer)
+                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.pem)
             </a>
             <button class="btn btn-secondary" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
                 <span class="mdi mdi-card-account-details-outline"></span> Download Client Cert (.p12)
@@ -72,6 +71,33 @@
         </div>
         <div id="error-windows-p12" class="text-danger small mt-2" style="display:none;"></div>
         <div id="error-windows" class="text-danger small mt-2" style="display:none;"></div>
+    </div>
+</div>
+<div class="card mt-3">
+    <div class="card-header platform-header-alt" style="border-bottom-color: #0dcaf0;">
+        <strong style="color: #0dcaf0;"><span class="mdi mdi-linux"></span> Linux</strong>
+    </div>
+    <div class="card-body">
+        <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
+            <a href="/profile/ca" class="btn btn-outline-info">
+                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.pem)
+            </a>
+            <button class="btn btn-info" onclick="downloadProfile('android', 'linux')" id="btn-linux">
+                <span class="mdi mdi-download"></span> Download Client Cert (.p12)
+            </button>
+            <span id="spinner-linux" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
+        </div>
+        <div id="error-linux" class="text-danger small mt-2" style="display:none;"></div>
+
+        <p class="small fw-semibold mb-1">Add a network block to <code>/etc/wpa_supplicant/wpa_supplicant.conf</code>:</p>
+        <pre class="rounded p-2 mb-0" style="background:var(--pint-code-bg);color:var(--pint-text);font-size:.8rem">network={
+    ssid="{{.SSID}}"
+    key_mgmt=WPA-EAP
+    eap=TLS
+    identity="{{.Username}}"
+    ca_cert="/etc/wpa_supplicant/ca.pem"
+    private_key="/etc/wpa_supplicant/client.p12"
+}</pre>
     </div>
 </div>
 {{end}}
