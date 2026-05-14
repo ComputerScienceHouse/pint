@@ -3,6 +3,7 @@ package radius
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -13,14 +14,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-// WriteRadiusConfig renders clients.conf from the given client list and writes it
-// to the named Kubernetes Secret (creating it if needed).
+// Secret keys in the combined config secret.
+const (
+	KeyClientsJSON  = "clients.json"
+	KeyClientsConf  = "clients.conf"
+	KeyStatusSecret = "status-secret"
+	KeyStatus       = "status"
+)
+
+// WriteRadiusConfig renders clients.conf from the given client list and patches
+// the clients.conf key in the named Kubernetes Secret.
 func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, clients []RadiusClient) error {
-	conf := RenderClientsConf(clients)
-	return upsertSecret(ctx, k8s, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
-		Data:       map[string][]byte{"clients.conf": []byte(conf)},
-	})
+	return patchSecretKey(ctx, k8s, namespace, secretName, KeyClientsConf, []byte(RenderClientsConf(clients)))
 }
 
 // WriteRadSecServerCert writes all FreeRADIUS TLS material to the named K8s Secret:
@@ -39,22 +44,32 @@ func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namesp
 	})
 }
 
-// EnsureConfigSecrets creates the RADIUS client secrets with empty content if they don't
-// already exist. Safe to call on every startup — it is a no-op when secrets are present.
-func EnsureConfigSecrets(ctx context.Context, k8s kubernetes.Interface, namespace, clientsSecret, configSecret string) error {
-	if err := createIfAbsent(ctx, k8s, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: clientsSecret, Namespace: namespace},
-		Data:       map[string][]byte{"clients.json": []byte("[]")},
-	}); err != nil {
-		return fmt.Errorf("init clients secret: %w", err)
+// EnsureConfigSecret creates the combined PINT config secret with all keys
+// initialized to safe defaults if it does not already exist.
+// Safe to call on every startup — it is a no-op when the secret is present.
+func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string) error {
+	return createIfAbsent(ctx, k8s, &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+		Data: map[string][]byte{
+			KeyClientsJSON:  []byte("[]"),
+			KeyClientsConf:  []byte(RenderClientsConf(nil)),
+			KeyStatusSecret: []byte(""),
+			KeyStatus:       []byte(""),
+		},
+	})
+}
+
+// patchSecretKey updates a single key without touching the rest of the secret,
+// avoiding races with other components that may patch different keys concurrently.
+func patchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string, value []byte) error {
+	p, err := json.Marshal(map[string]interface{}{
+		"data": map[string][]byte{key: value},
+	})
+	if err != nil {
+		return err
 	}
-	if err := createIfAbsent(ctx, k8s, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: configSecret, Namespace: namespace},
-		Data:       map[string][]byte{"clients.conf": []byte(RenderClientsConf(nil))},
-	}); err != nil {
-		return fmt.Errorf("init config secret: %w", err)
-	}
-	return nil
+	_, err = k8s.CoreV1().Secrets(namespace).Patch(ctx, secretName, types.MergePatchType, p, metav1.PatchOptions{})
+	return err
 }
 
 // upsertSecret creates or updates a Kubernetes Secret.

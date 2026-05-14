@@ -31,31 +31,19 @@ spec:
           securityContext:
             {{- toYaml .Values.freeradius.securityContext | nindent 12 }}
           volumeMounts:
-            # Full-directory mount (not subPath) so K8s auto-syncs clients.conf
-            # when the Secret changes; FreeRADIUS picks it up on the next SIGHUP.
-            - name: dynamic-clients
-              mountPath: /etc/freeradius/dynamic
+            - name: pint-config
+              mountPath: /etc/pint/config
               readOnly: true
-            # All TLS material written by PINT: server cert+key, RadSec CA,
-            # WiFi CA.  0444 so the freerad user can read without root.
-            - name: radsec-certs
-              mountPath: /run/secrets/radsec-server
-              readOnly: true
-            - name: radius-status-config
-              mountPath: /run/secrets/radius-status
+            - name: pint-radsec
+              mountPath: /etc/pint/radsec
               readOnly: true
       volumes:
-        - name: dynamic-clients
+        - name: pint-config
           secret:
-            secretName: {{ .Values.secrets.radiusConfig }}
+            secretName: {{ include "pint.secretName.config" . }}
             optional: true
-        - name: radsec-certs
+        - name: pint-radsec
           secret:
-            secretName: {{ .Values.secrets.radSecCert }}
-            optional: true
+            secretName: {{ include "pint.secretName.radSecCert" . }}
             defaultMode: 0444
-        - name: radius-status-config
-          secret:
-            secretName: {{ include "pint.freeradiusFullname" . }}-status-config
-            optional: true
 {{- end }}

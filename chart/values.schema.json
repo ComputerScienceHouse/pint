@@ -24,8 +24,7 @@
     },
     "envSecret": {
       "type": "string",
-      "description": "Name of the pre-existing Secret containing PINT_CLIENT_SECRET and PINT_IPA_PASSWORD.",
-      "default": "pint-env"
+      "description": "Name of the pre-existing Secret containing PINT_CLIENT_SECRET and PINT_IPA_PASSWORD. Defaults to the full release name."
     },
     "config": {
       "type": "object",
@@ -96,22 +95,15 @@
     },
     "secrets": {
       "type": "object",
-      "description": "Names of the Kubernetes Secrets PINT creates and manages at runtime.",
+      "description": "Names of the Kubernetes Secrets PINT creates and manages at runtime. All names default to '<fullname>-<suffix>' so multiple releases in the same namespace never collide.",
       "properties": {
-        "radiusClients": {
+        "config": {
           "type": "string",
-          "description": "Secret storing the RADIUS client list (clients.json).",
-          "default": "pint-radius-clients"
-        },
-        "radiusConfig": {
-          "type": "string",
-          "description": "Secret storing the rendered FreeRADIUS clients.conf.",
-          "default": "pint-radius-config"
+          "description": "Combined config secret (clients.json, clients.conf, status-secret, status). Defaults to '<fullname>-config'."
         },
         "radSecCert": {
           "type": "string",
-          "description": "Secret storing the FreeRADIUS TLS certificate and key.",
-          "default": "pint-radsec-server"
+          "description": "Secret storing the FreeRADIUS TLS certificate and key. Defaults to '<fullname>-radsec-server-certificates'."
         }
       }
     },

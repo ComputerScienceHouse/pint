@@ -7,7 +7,7 @@
 # Clients here inherit TLS from the listener; no tls{} block is needed per
 # client entry.  The dynamic file is written by PINT and reloaded via SIGHUP.
 clients radsec {
-    $-INCLUDE /etc/freeradius/dynamic/clients.conf
+    $-INCLUDE /etc/pint/config/clients.conf
 }
 
 server radsec {
@@ -22,12 +22,12 @@ server radsec {
         tls {
             # Server cert — presented to connecting routers and to EAP supplicants.
             # Issued by PINT via FreeIPA and written to the pint-radsec-server Secret.
-            private_key_file  = /run/secrets/radsec-server/tls.key
-            certificate_file  = /run/secrets/radsec-server/tls.crt
+            private_key_file  = /etc/pint/radsec/tls.key
+            certificate_file  = /etc/pint/radsec/tls.crt
 
             # RadSec CA chain — verifies that the connecting router's client cert
             # was issued by the PINT RadSec intermediate CA.
-            ca_file           = /run/secrets/radsec-server/ca.pem
+            ca_file           = /etc/pint/radsec/ca.pem
 
             tls_min_version   = "1.2"
             cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"

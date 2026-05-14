@@ -7,85 +7,47 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-const statusSecretName = "pint-freeradius-status-secret"
-
-// EnsureStatusConfig ensures the FreeRADIUS status virtual server is configured.
-// If the secret does not exist, it generates a random 32-char secret and creates it.
+// EnsureStatusConfig ensures the status-secret key exists in the named Secret.
+// If absent or empty, generates a random 32-char value and patches it in.
 // Returns (secretValue, err).
-func EnsureStatusConfig(ctx context.Context, k8s kubernetes.Interface, namespace string) (string, error) {
-	secret, err := k8s.CoreV1().Secrets(namespace).Get(ctx, statusSecretName, metav1.GetOptions{})
+func EnsureStatusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string) (string, error) {
+	secret, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
 	if err == nil {
-		if data, ok := secret.Data["status-secret"]; ok {
+		if data, ok := secret.Data[KeyStatusSecret]; ok && len(data) > 0 {
 			return string(data), nil
 		}
 	}
 
-	// Generate new secret
 	b := make([]byte, 16)
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("generate status secret: %w", err)
 	}
 	secretValue := hex.EncodeToString(b)
 
-	newSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      statusSecretName,
-			Namespace: namespace,
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: map[string][]byte{
-			"status-secret": []byte(secretValue),
-		},
+	if err := patchSecretKey(ctx, k8s, namespace, secretName, KeyStatusSecret, []byte(secretValue)); err != nil {
+		return "", fmt.Errorf("patch status secret: %w", err)
 	}
-
-	if _, err := k8s.CoreV1().Secrets(namespace).Create(ctx, newSecret, metav1.CreateOptions{}); err != nil {
-		return "", fmt.Errorf("create status secret: %w", err)
-	}
-
 	return secretValue, nil
 }
 
-// RenderStatusConfig returns the FreeRADIUS virtual server configuration a la "clients.conf".
-// This is intended to be included via $-INCLUDE into a virtual server block.
-func RenderStatusConfig(port, secret, cidr string) string {
+// RenderStatusConfig returns the FreeRADIUS client block for the status virtual server.
+func RenderStatusConfig(secret, cidr string) string {
 	return fmt.Sprintf(`client status {
     ipaddr = %s
     secret = %s
 }`, cidr, secret)
 }
 
-// WriteStatusConfig writes the rendered status virtual server config to a K8S Secret.
-// Returns (didUpdate, err). didUpdate is true if the secret was created or modified.
+// WriteStatusConfig patches the status key in the named Secret with the rendered config.
+// Returns (didUpdate, err). didUpdate is false when the existing value is identical.
 func WriteStatusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, config string) (bool, error) {
-	data := map[string][]byte{
-		"status": []byte(config),
-	}
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: namespace,
-		},
-		Type: corev1.SecretTypeOpaque,
-		Data: data,
-	}
-
 	existing, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
-	if err == nil {
-		// Check if existing data is identical to avoid unnecessary updates
-		if string(existing.Data["status"]) == config {
-			return false, nil
-		}
+	if err == nil && string(existing.Data[KeyStatus]) == config {
+		return false, nil
 	}
-
-	_, err = k8s.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
-	if err != nil {
-		// Create if not found
-		_, err = k8s.CoreV1().Secrets(namespace).Create(ctx, secret, metav1.CreateOptions{})
-	}
-	return true, err
+	return true, patchSecretKey(ctx, k8s, namespace, secretName, KeyStatus, []byte(config))
 }

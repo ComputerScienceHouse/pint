@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -68,7 +67,7 @@ func (s *ClientStore) Load(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("get secret %s: %w", s.secretName, err)
 	}
-	data, ok := secret.Data["clients.json"]
+	data, ok := secret.Data[KeyClientsJSON]
 	if !ok {
 		return nil
 	}
@@ -78,23 +77,20 @@ func (s *ClientStore) Load(ctx context.Context) error {
 			Clients []RadiusClient `json:"clients"`
 		}
 		if err2 := json.Unmarshal(data, &legacy); err2 != nil {
-			return fmt.Errorf("unmarshal clients.json: %w", err)
+			return fmt.Errorf("unmarshal %s: %w", KeyClientsJSON, err)
 		}
 		s.clients = legacy.Clients
 	}
 	return nil
 }
 
-// Save writes the current client list back to the Kubernetes Secret, creating it if needed.
+// Save patches the clients.json key in the Kubernetes Secret with the current client list.
 func (s *ClientStore) Save(ctx context.Context) error {
 	data, err := json.Marshal(s.clients)
 	if err != nil {
 		return err
 	}
-	return upsertSecret(ctx, s.k8s, &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: s.secretName, Namespace: s.namespace},
-		Data:       map[string][]byte{"clients.json": data},
-	})
+	return patchSecretKey(ctx, s.k8s, s.namespace, s.secretName, KeyClientsJSON, data)
 }
 
 // Upsert inserts or replaces the entry for client.Username.

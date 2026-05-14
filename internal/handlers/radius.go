@@ -29,7 +29,7 @@ var ekuNames = map[x509.ExtKeyUsage]string{
 func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -57,7 +57,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 			entry.IPCIDR = &ipCIDR
 		}
 
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -78,7 +78,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -109,7 +109,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFu
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -145,7 +145,7 @@ func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -196,7 +196,7 @@ func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Inter
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return "", err
 	}
-	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
+	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.ConfigSecret, store.All()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return "", err
 	}

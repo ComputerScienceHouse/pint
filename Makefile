@@ -62,10 +62,11 @@ dev-freeradius:
 	kind load docker-image $(FR_IMAGE) --name $(CLUSTER)
 	kubectl rollout restart deployment/pint-freeradius -n $(NAMESPACE) 2>/dev/null || true
 
-# Create the pint-env K8s Secret from .env.dev so PINT can run in-cluster.
+# Create the envSecret K8s Secret from .env.dev so PINT can run in-cluster.
+# The release name is "pint" so the secret name matches the chart default (envSecret=<fullname>="pint").
 # Only needed if you want to run PINT in kind (pint.enabled=true) rather than locally.
 dev-secret:
-	kubectl create secret generic pint-env \
+	kubectl create secret generic pint \
 		--namespace $(NAMESPACE) \
 		--from-env-file=.env.dev \
 		--dry-run=client -o yaml | kubectl apply -f -

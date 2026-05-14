@@ -35,11 +35,11 @@ issue_cert() {
 }
 
 echo "==> Fetching RadSec CA from cluster..."
-kubectl get secret pint-radsec-server -n "$NAMESPACE" \
+kubectl get secret pint-radsec-server-certificates -n "$NAMESPACE" \
     -o jsonpath='{.data.ca\.pem}' | base64 -d > "$D/radsec-ca.pem"
 
 echo "==> Verifying organization controller is registered..."
-ROOT=$(kubectl get secret pint-radius-clients -n "$NAMESPACE" \
+ROOT=$(kubectl get secret pint-config -n "$NAMESPACE" \
     -o jsonpath='{.data.clients\.json}' 2>/dev/null | base64 -d \
     | jq -r '.[] | select(.username == "root") | .username' 2>/dev/null)
 if [ -z "$ROOT" ]; then

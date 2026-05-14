@@ -23,10 +23,11 @@ COPY eap /etc/raddb/mods-available/eap
 COPY clients.conf /etc/raddb/clients.conf
 
 # Ensure enabled dirs exist (rm above may leave them empty on Alpine),
-# enable our configs, and create the dynamic clients mount point.
+# enable our configs, and create the PINT secret mount points.
 RUN mkdir -p /etc/raddb/sites-enabled \
              /etc/raddb/mods-enabled \
-             /etc/freeradius/dynamic && \
+             /etc/pint/config \
+             /etc/pint/radsec && \
     ln -sf /etc/raddb/sites-available/radsec \
            /etc/raddb/sites-enabled/radsec && \
     ln -sf /etc/raddb/sites-available/status \

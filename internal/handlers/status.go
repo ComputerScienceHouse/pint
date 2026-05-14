@@ -23,7 +23,7 @@ func StatusPageHandler(cfg *config.Config, k8s kubernetes.Interface, metricsClie
 
 		ctx := c.Request.Context()
 
-		statusSecret, err := radius.EnsureStatusConfig(ctx, k8s, cfg.Namespace)
+		statusSecret, err := radius.EnsureStatusConfig(ctx, k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err != nil {
 			statusSecret = ""
 		}
@@ -42,7 +42,7 @@ func StatusPageHandler(cfg *config.Config, k8s kubernetes.Interface, metricsClie
 			data["Cert"] = certInfo
 		}
 
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(ctx); err == nil {
 			clients := store.All()
 			noIP := 0

@@ -43,15 +43,17 @@ config:
 #   PINT_CLIENT_SECRET  - OIDC client secret
 #   PINT_IPA_PASSWORD   - FreeIPA service account password
 # All other config is rendered into a ConfigMap from the config block above.
-envSecret: pint-env
+# Defaults to "<fullname>" (i.e. the Helm release name) when left empty.
+envSecret: ""
 
 # Names of the K8s Secrets PINT creates and manages at runtime.
 # These are referenced consistently across the Role, PINT env vars, and
-# FreeRADIUS volume mounts - change all three if you rename them.
+# FreeRADIUS volume mounts. All names default to "<fullname>-<suffix>" so
+# multiple releases in the same namespace never collide. Override only when
+# you need to share a secret between releases.
 secrets:
-  radiusClients: pint-radius-clients
-  radiusConfig:  pint-radius-config
-  radSecCert:    pint-radsec-server
+  config:     ""  # default: <fullname>-config  (clients.json, clients.conf, status-secret, status)
+  radSecCert: ""  # default: <fullname>-radsec-server-certificates  (tls.crt, tls.key, ca.pem, wifi-ca.pem)
 
 service:
   type: ClusterIP

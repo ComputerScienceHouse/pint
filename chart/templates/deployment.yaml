@@ -28,7 +28,7 @@ spec:
             - configMapRef:
                 name: {{ include "pint.fullname" . }}
             - secretRef:
-                name: {{ .Values.envSecret }}
+                name: {{ include "pint.envSecret" . }}
           env:
             # Non-sensitive deployment config injected by the chart so it stays
             # consistent with the Role resourceNames and FreeRADIUS volume mounts.
@@ -36,12 +36,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: PINT_RADIUS_CLIENTS_SECRET
-              value: {{ .Values.secrets.radiusClients | quote }}
-            - name: PINT_RADIUS_CONFIG_SECRET
-              value: {{ .Values.secrets.radiusConfig | quote }}
+            - name: PINT_CONFIG_SECRET
+              value: {{ include "pint.secretName.config" . | quote }}
             - name: PINT_RADSEC_CERT_SECRET
-              value: {{ .Values.secrets.radSecCert | quote }}
+              value: {{ include "pint.secretName.radSecCert" . | quote }}
             {{- if .Values.freeradius.enabled }}
             - name: PINT_FREERADIUS_DEPLOYMENT
               value: {{ include "pint.freeradiusFullname" . | quote }}

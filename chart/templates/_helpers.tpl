@@ -42,6 +42,23 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Runtime-managed secret names.
+These default to "<fullname>-<suffix>" so multiple releases in the same namespace
+never collide. Each can be overridden via the corresponding values key.
+*/}}
+{{- define "pint.secretName.config" -}}
+{{- .Values.secrets.config | default (printf "%s-config" (include "pint.fullname" .)) }}
+{{- end }}
+
+{{- define "pint.secretName.radSecCert" -}}
+{{- .Values.secrets.radSecCert | default (printf "%s-radsec-server-certificates" (include "pint.fullname" .)) }}
+{{- end }}
+
+{{- define "pint.envSecret" -}}
+{{- .Values.envSecret | default (include "pint.fullname" .) }}
+{{- end }}
+
+{{/*
 FreeRADIUS labels / selector labels.
 The selector string is also injected into PINT as PINT_FREERADIUS_POD_SELECTOR
 so it always matches these labels exactly.

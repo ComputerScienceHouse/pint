@@ -12,10 +12,9 @@ rules:
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames:
-      - {{ .Values.secrets.radiusClients | quote }}
-      - {{ .Values.secrets.radiusConfig | quote }}
-      - {{ .Values.secrets.radSecCert | quote }}
-    verbs: ["get", "update"]
+      - {{ include "pint.secretName.config" . | quote }}
+      - {{ include "pint.secretName.radSecCert" . | quote }}
+    verbs: ["get", "patch"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["list"]

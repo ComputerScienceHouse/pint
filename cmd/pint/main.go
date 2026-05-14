@@ -62,17 +62,17 @@ func main() {
 	}
 
 	// Initialize RADIUS secrets with empty content if they don't exist yet.
-	if err := radius.EnsureConfigSecrets(context.Background(), k8sClient, cfg.Namespace, cfg.RadiusClientsSecret, cfg.RadiusConfigSecret); err != nil {
+	if err := radius.EnsureConfigSecret(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret); err != nil {
 		log.Fatalf("init radius secrets: %v", err)
 	}
 
 	// Ensure FreeRADIUS status server is configured.
-	statusSecret, err := radius.EnsureStatusConfig(context.Background(), k8sClient, cfg.Namespace)
+	statusSecret, err := radius.EnsureStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret)
 	if err != nil {
 		log.Fatalf("ensure status secret: %v", err)
 	}
-	statusConf := radius.RenderStatusConfig("18121", statusSecret, "0.0.0.0/0")
-	updated, err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, "pint-freeradius-status-config", statusConf)
+	statusConf := radius.RenderStatusConfig(statusSecret, "0.0.0.0/0")
+	updated, err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, statusConf)
 	if err != nil {
 		log.Fatalf("write status config: %v", err)
 	}

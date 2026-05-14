@@ -18,7 +18,7 @@ const rootUsername = "root"
 func AdminRadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -42,7 +42,7 @@ func AdminDeleteHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient 
 			c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
 			return
 		}
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -65,7 +65,7 @@ func AdminRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s k
 			c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
 			return
 		}
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -93,7 +93,7 @@ func AdminRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s k
 func AdminRootProvisionHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -122,7 +122,7 @@ func AdminRootProvisionHandler(ipaClient *freeipa.Client, cfg *config.Config, k8
 func AdminRootRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -151,7 +151,7 @@ func AdminRootRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k
 // AdminRootUpdateIPHandler serves POST /admin/radius/root/update-ip.
 func AdminRootUpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.RadiusClientsSecret)
+		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return

@@ -32,10 +32,9 @@ type Config struct {
 	WiFiSSID string
 
 	// Kubernetes
-	Namespace             string
-	RadiusClientsSecret   string
-	RadiusConfigSecret    string
-	RadSecCertSecret      string // PINT_RADSEC_CERT_SECRET:K8s Secret storing FreeRADIUS TLS cert+key
+	Namespace            string
+	ConfigSecret         string // PINT_CONFIG_SECRET:K8s Secret holding clients.json, clients.conf, status-secret, and status config
+	RadSecCertSecret     string // PINT_RADSEC_CERT_SECRET:K8s Secret storing FreeRADIUS TLS cert+key
 	FreeRADIUSDeployment string
 
 	// FreeRADIUS status virtual server
@@ -80,9 +79,8 @@ func Load() (*Config, error) {
 	cfg.WiFiSSID = require("PINT_WIFI_SSID")
 
 	cfg.Namespace = optional("PINT_NAMESPACE", "pint")
-	cfg.RadiusClientsSecret = optional("PINT_RADIUS_CLIENTS_SECRET", "pint-radius-clients")
-	cfg.RadiusConfigSecret = optional("PINT_RADIUS_CONFIG_SECRET", "pint-radius-config")
-	cfg.RadSecCertSecret = optional("PINT_RADSEC_CERT_SECRET", "pint-radsec-server")
+	cfg.ConfigSecret = optional("PINT_CONFIG_SECRET", "pint-config")
+	cfg.RadSecCertSecret = optional("PINT_RADSEC_CERT_SECRET", "pint-radsec-server-certificates")
 	cfg.FreeRADIUSDeployment = optional("PINT_FREERADIUS_DEPLOYMENT", "pint-freeradius")
 	cfg.RadiusServer = require("PINT_RADIUS_SERVER")
 	cfg.RADIUSStatusPort = optional("PINT_RADIUS_STATUS_PORT", "18121")

@@ -13,9 +13,9 @@ import (
 
 func TestStore_UpsertAndLoad(t *testing.T) {
 	ctx := context.Background()
-	k8s := fake.NewSimpleClientset()
+	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
 
-	store := radius.NewClientStore(k8s, "default", "pint-radius-clients")
+	store := radius.NewClientStore(k8s, "default", "pint-config")
 
 	if err := store.Load(ctx); err != nil {
 		t.Fatalf("Load on missing secret should not error: %v", err)
@@ -29,7 +29,7 @@ func TestStore_UpsertAndLoad(t *testing.T) {
 	}
 
 	// Load fresh store from same k8s client
-	store2 := radius.NewClientStore(k8s, "default", "pint-radius-clients")
+	store2 := radius.NewClientStore(k8s, "default", "pint-config")
 	if err := store2.Load(ctx); err != nil {
 		t.Fatalf("Load() after Save() error: %v", err)
 	}
@@ -44,8 +44,8 @@ func TestStore_UpsertAndLoad(t *testing.T) {
 
 func TestStore_UpsertOverwrites(t *testing.T) {
 	ctx := context.Background()
-	k8s := fake.NewSimpleClientset()
-	store := radius.NewClientStore(k8s, "default", "pint-radius-clients")
+	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
+	store := radius.NewClientStore(k8s, "default", "pint-config")
 	if err := store.Load(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +66,8 @@ func TestStore_UpsertOverwrites(t *testing.T) {
 
 func TestStore_Delete(t *testing.T) {
 	ctx := context.Background()
-	k8s := fake.NewSimpleClientset()
-	store := radius.NewClientStore(k8s, "default", "pint-radius-clients")
+	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
+	store := radius.NewClientStore(k8s, "default", "pint-config")
 	if err := store.Load(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -84,14 +84,13 @@ func TestStore_LoadExisting(t *testing.T) {
 	ctx := context.Background()
 
 	existing := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "pint-radius-clients", Namespace: "default"},
+		ObjectMeta: metav1.ObjectMeta{Name: "pint-config", Namespace: "default"},
 		Data: map[string][]byte{
-			// legacy JSON with "secret" field is silently ignored on load
 			"clients.json": []byte(`[{"username":"jsmith","secret":"abc","ip_cidr":null}]`),
 		},
 	}
 	k8s := fake.NewSimpleClientset(existing)
-	store := radius.NewClientStore(k8s, "default", "pint-radius-clients")
+	store := radius.NewClientStore(k8s, "default", "pint-config")
 	if err := store.Load(ctx); err != nil {
 		t.Fatal(err)
 	}

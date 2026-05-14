@@ -7,9 +7,9 @@ eap {
     timer_expire     = 60
 
     tls-config tls-csh {
-        private_key_file  = /run/secrets/radsec-server/tls.key
-        certificate_file  = /run/secrets/radsec-server/tls.crt
-        ca_file           = /run/secrets/radsec-server/wifi-ca.pem
+        private_key_file  = /etc/pint/radsec/tls.key
+        certificate_file  = /etc/pint/radsec/tls.crt
+        ca_file           = /etc/pint/radsec/wifi-ca.pem
         tls_min_version   = "1.2"
         cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"
         ecdh_curve        = "prime256v1"

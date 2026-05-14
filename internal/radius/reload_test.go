@@ -12,20 +12,31 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+func newConfigSecret(ns, name string) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Data: map[string][]byte{
+			"clients.json":  []byte("[]"),
+			"clients.conf":  []byte(""),
+			"status-secret": []byte(""),
+			"status":        []byte(""),
+		},
+	}
+}
+
 func TestWriteRadiusConfig(t *testing.T) {
 	ctx := context.Background()
-	k8s := fake.NewSimpleClientset()
+	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
 
 	clients := []radius.RadiusClient{
 		{Username: "mbillow", IPCIDR: nil},
 	}
 
-	err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-radius-config", clients)
-	if err != nil {
+	if err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-config", clients); err != nil {
 		t.Fatalf("WriteRadiusConfig() error: %v", err)
 	}
 
-	secret, err := k8s.CoreV1().Secrets("default").Get(ctx, "pint-radius-config", metav1.GetOptions{})
+	secret, err := k8s.CoreV1().Secrets("default").Get(ctx, "pint-config", metav1.GetOptions{})
 	if err != nil {
 		t.Fatalf("Get secret error: %v", err)
 	}
@@ -47,8 +58,7 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	caPEM := []byte("-----BEGIN CERTIFICATE-----\nfake-ca\n-----END CERTIFICATE-----\n")
 	wifiCAPEM := []byte("-----BEGIN CERTIFICATE-----\nfake-wifi-ca\n-----END CERTIFICATE-----\n")
 
-	err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM)
-	if err != nil {
+	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
 		t.Fatalf("WriteRadSecServerCert() error: %v", err)
 	}
 
@@ -70,8 +80,7 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	}
 
 	// Call again to exercise the update path
-	err = radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM)
-	if err != nil {
+	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
 		t.Fatalf("WriteRadSecServerCert() update error: %v", err)
 	}
 }
@@ -80,8 +89,7 @@ func TestReload_DeploymentNotFound(t *testing.T) {
 	ctx := context.Background()
 	k8s := fake.NewSimpleClientset()
 
-	err := radius.Reload(ctx, k8s, "default", "pint-freeradius")
-	if err == nil {
+	if err := radius.Reload(ctx, k8s, "default", "pint-freeradius"); err == nil {
 		t.Fatal("expected error when deployment not found")
 	}
 }
