@@ -311,14 +311,20 @@ func signCSR(csrPEM []byte, profileID string, ca *caEntry) ([]byte, error) {
 
 	eku := x509.ExtKeyUsageClientAuth
 	validity := 5 * 365 * 24 * time.Hour
+	var dnsNames []string
 	if profileID == profileRadSecServer {
 		eku = x509.ExtKeyUsageServerAuth
 		validity = 90 * 24 * time.Hour
+		// SANs are required by RFC 6125 / Go 1.15+ / OpenSSL for server certs.
+		if cn := csr.Subject.CommonName; cn != "" {
+			dnsNames = []string{cn}
+		}
 	}
 
 	tmpl := &x509.Certificate{
 		SerialNumber: big.NewInt(serialCounter.Add(1)),
 		Subject:      csr.Subject,
+		DNSNames:     dnsNames,
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().Add(validity),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

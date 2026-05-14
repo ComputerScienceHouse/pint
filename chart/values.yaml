@@ -68,6 +68,12 @@ freeradius:
     type: LoadBalancer
     nodePort: null  # only used when type=NodePort
   checkCRL: true
+  # FreeRADIUS status virtual server — used by PINT to surface per-pod auth statistics.
+  # Managed automatically by PINT at startup.
+  statusServer:
+    enabled: true
+    clientCIDR: "0.0.0.0/0"  # CIDR allowed to query the status server; restrict to pod CIDR in production
+    nodePort: null  # UDP NodePort for status server; only used when freeradius.service.type=NodePort
   securityContext:
     runAsNonRoot: true
     allowPrivilegeEscalation: false

@@ -42,11 +42,17 @@ Single stateless Go binary, server-rendered HTML templates, no database. All per
 | GET | `/profile` | required | Profile generation page |
 | POST | `/profile/generate` | required | Issue cert, return mobileconfig (iOS/macOS) or PKCS#12 (Android) |
 | GET | `/profile/ca` | required | Download WiFi CA cert |
-| GET | `/radius` | required | RADIUS management page |
-| POST | `/radius/secret` | required | Register / update RADIUS shared secret |
-| POST | `/radius/delete` | required | Remove RADIUS entry |
-| GET | `/radius/client-cert` | required | Issue and download RadSec client cert (PKCS#12) |
-| GET | `/radius/ca` | required | Download RadSec CA cert |
+| GET | `/radius` | required | RADIUS self-service page (enroll, update IP, regenerate, delete) |
+| POST | `/radius/secret` | required | Enroll RADIUS client |
+| POST | `/radius/regenerate` | required | Revoke and reissue credentials |
+| POST | `/radius/update-ip` | required | Update source IP/CIDR restriction |
+| POST | `/radius/delete` | required | Remove RADIUS entry and revoke cert |
+| GET | `/radius/ca` | required | Download RadSec CA chain |
+| GET | `/status` | required | FreeRADIUS deployment health, pod logs, cert expiry, client count |
+| POST | `/status/reload` | RTP only | Trigger FreeRADIUS rollout restart |
+| GET | `/admin/radius` | RTP only | All enrolled RADIUS clients with admin actions |
+| POST | `/admin/radius/delete` | RTP only | Revoke cert and remove any user's RADIUS entry |
+| POST | `/admin/radius/regenerate` | RTP only | Reissue credentials for any user |
 
 ## Prerequisites
 
@@ -89,15 +95,22 @@ All config is read from environment variables. Copy `.env.dev.example` to `.env.
 The repo includes a FreeIPA stub server that generates a real CA at startup and handles `ca_show` and `cert_request` RPC calls.
 
 ```bash
-# 1. Copy and edit the dev env file
+# 1. Create the kind dev cluster, install the Helm chart, build the FreeRADIUS
+#    image, and install metrics-server (for pod CPU/memory on the status page).
+#    Safe to re-run; skips steps that are already complete.
+make dev-setup
+
+# 2. Copy and edit the dev env file
 cp .env.dev.example .env.dev
 # (edit .env.dev - the stub defaults work as-is for IPA fields)
 
-# 2. Build and start everything
+# 3. Build and start everything
 make dev
 ```
 
 `make dev` builds both binaries, starts the FreeIPA stub on `:8088` in the background, then starts PINT on `:8080` with env vars sourced from `.env.dev`.
+
+To test the RTP admin routes (`/status` reload button, `/admin/radius`) locally, set `PINT_DEV_RTP=true` in `.env.dev`. This injects the `rtp` group into the dev user's claims.
 
 Other useful targets:
 
@@ -106,6 +119,9 @@ make build        # compile pint binary
 make build-stub   # compile freeipa-stub binary
 make test         # go test ./... -v
 make lint         # go vet ./...
+make dev-metrics  # (re-)install metrics-server in the kind cluster
+make dev-logs     # stream FreeRADIUS logs
+make dev-forward  # port-forward RadSec to localhost:2083
 make docker-build # docker build -t pint:dev .
 make clean        # remove binaries, kill stub
 ```

@@ -27,6 +27,10 @@ freeradius:
     type: NodePort
     nodePort: 32083
   checkCRL: false
+  statusServer:
+    enabled: true
+    clientCIDR: "0.0.0.0/0"
+    nodePort: 31181
   securityContext:
     runAsNonRoot: true
     runAsUser: 101

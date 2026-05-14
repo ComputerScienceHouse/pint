@@ -1,0 +1,644 @@
+<!-- templates/status.html -->
+{{template "layout.html" .}}
+{{define "title"}}RADIUS Status | PINT{{end}}
+{{define "content"}}
+
+<style>
+/* ── Status page ───────────────────────────────────────────────────────── */
+
+.status-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+/* Health tiles — no colored card headers; color lives on the value */
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .75rem;
+  margin-bottom: 1.5rem;
+}
+
+.health-tile {
+  border: 1px solid var(--pint-border);
+  border-radius: .5rem;
+  padding: 1rem 1.25rem;
+  background: var(--pint-surface);
+}
+
+.health-tile-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--pint-muted);
+  margin-bottom: .5rem;
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.health-tile-value {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -.025em;
+}
+
+.health-tile-value .denom {
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--pint-muted);
+  letter-spacing: 0;
+}
+
+.health-tile-sub {
+  font-size: .73rem;
+  color: var(--pint-muted);
+  margin-top: .35rem;
+}
+
+/* Deploy info — two items inline, no extra cards */
+.deploy-bar {
+  display: flex;
+  gap: 2.5rem;
+  padding: .625rem 0;
+  border-top: 1px solid var(--pint-border);
+  border-bottom: 1px solid var(--pint-border);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.deploy-item-label {
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--pint-muted);
+  margin-bottom: .15rem;
+}
+
+.deploy-item-value {
+  font-size: .83rem;
+  color: var(--pint-text);
+}
+
+/* Pod card */
+.pod-card {
+  border: 1px solid var(--pint-border);
+  border-radius: .5rem;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  background: var(--pint-surface);
+}
+
+.pod-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .6rem 1rem;
+  background: var(--pint-alt-header-bg);
+  border-bottom: 1px solid var(--pint-border);
+  gap: .75rem;
+}
+
+.pod-name {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Fira Code', monospace;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--pint-text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pod-head-meta {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  flex-shrink: 0;
+  font-size: .75rem;
+}
+
+.pod-uptime {
+  color: var(--pint-muted);
+  white-space: nowrap;
+}
+
+/* Pod body */
+.pod-body {
+  padding: .875rem 1rem .625rem;
+}
+
+.pod-started {
+  font-size: .73rem;
+  color: var(--pint-muted);
+  margin-bottom: .75rem;
+}
+
+/* Resource strip — compact chips, not a table */
+.resource-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  font-size: .75rem;
+  margin-bottom: .75rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--pint-border);
+  align-items: center;
+}
+
+.resource-group {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.resource-group-label {
+  font-size: .64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--pint-muted);
+}
+
+.resource-chip {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+  font-size: .73rem;
+  padding: .1em .45em;
+  border: 1px solid var(--pint-border);
+  border-radius: .25rem;
+  background: var(--pint-surface-raised);
+  color: var(--pint-text);
+}
+
+.resource-chip.usage {
+  border-color: var(--bs-primary);
+  color: var(--bs-primary);
+  background: transparent;
+}
+
+.resource-sep {
+  width: 1px;
+  height: .875rem;
+  background: var(--pint-border);
+}
+
+/* Auth stat strip */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--pint-border);
+  border-radius: .375rem;
+  overflow: hidden;
+  margin-bottom: .875rem;
+}
+
+.stat-cell {
+  padding: .625rem .75rem;
+  border-right: 1px solid var(--pint-border);
+}
+.stat-cell:last-child { border-right: 0; }
+
+/* Thicker divider before the error group */
+.stat-cell.error-group-start {
+  border-left: 2px solid var(--pint-border);
+}
+
+.stat-cell-label {
+  font-size: .64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--pint-muted);
+  margin-bottom: .25rem;
+  white-space: nowrap;
+}
+
+.stat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.025em;
+  color: var(--pint-text);
+}
+
+.stat-num.muted       { color: var(--pint-muted); }
+.stat-num.ok          { color: #198754; }
+.stat-num.warn        { color: #fd7e14; }
+.stat-num.danger      { color: #dc3545; }
+
+/* Thread cell */
+.stat-thread-nums {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: -.02em;
+  color: var(--pint-text);
+}
+
+.stat-thread-nums .denom {
+  font-size: .75rem;
+  font-weight: 400;
+  color: var(--pint-muted);
+}
+
+.thread-track {
+  height: 2px;
+  background: var(--pint-border);
+  border-radius: 1px;
+  margin-top: .45rem;
+  overflow: hidden;
+}
+
+.thread-fill {
+  height: 100%;
+  background: var(--bs-primary);
+  border-radius: 1px;
+  transition: width .4s ease-out;
+}
+
+/* Log output */
+.pod-logs-wrap {
+  position: relative;
+  border-top: 1px solid var(--pint-border);
+}
+
+.pod-logs {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Fira Code', monospace;
+  font-size: .73rem;
+  line-height: 1.55;
+  max-height: 300px;
+  overflow-y: auto;
+  padding: .75rem 1rem;
+  background: var(--pint-surface-raised);
+  color: var(--pint-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* Fade hint at top of log when scrollable */
+.pod-logs-wrap::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2rem;
+  background: linear-gradient(to bottom, var(--pint-surface-raised), transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Load animations */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .health-tile {
+    animation: fadeUp .2s ease both;
+  }
+  .health-tile:nth-child(1) { animation-delay: .04s; }
+  .health-tile:nth-child(2) { animation-delay: .08s; }
+  .health-tile:nth-child(3) { animation-delay: .12s; }
+
+  .pod-card {
+    animation: fadeUp .2s ease both;
+    animation-delay: .1s;
+  }
+
+  .stat-cell {
+    animation: fadeUp .18s ease both;
+  }
+  .stat-cell:nth-child(1) { animation-delay: .14s; }
+  .stat-cell:nth-child(2) { animation-delay: .18s; }
+  .stat-cell:nth-child(3) { animation-delay: .22s; }
+  .stat-cell:nth-child(4) { animation-delay: .26s; }
+  .stat-cell:nth-child(5) { animation-delay: .30s; }
+  .stat-cell:nth-child(6) { animation-delay: .34s; }
+  .stat-cell:nth-child(7) { animation-delay: .38s; }
+}
+
+/* Responsive: collapse stat strip on small screens */
+@media (max-width: 575px) {
+  .health-grid { grid-template-columns: 1fr 1fr; }
+  .health-grid > :last-child { grid-column: 1 / -1; }
+  /* Row 1: Accepted / Rejected / Success%  — Row 2: errors  — Row 3: Threads */
+  .stat-strip { grid-template-columns: repeat(3, 1fr); }
+  .stat-cell:nth-child(4) { border-top: 1px solid var(--pint-border); border-left: 0; }
+  .stat-cell:nth-child(5),
+  .stat-cell:nth-child(6) { border-top: 1px solid var(--pint-border); }
+  .stat-cell:nth-child(7) { grid-column: 1 / -1; border-top: 1px solid var(--pint-border); }
+}
+</style>
+
+<div class="status-page-head">
+    <h4 class="mb-0"><span class="mdi mdi-pulse"></span> FreeRADIUS Status</h4>
+    {{if .IsRTP}}
+    <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#reloadModal">
+        <span class="mdi mdi-restart"></span> Rollout Restart
+    </button>
+    {{end}}
+</div>
+
+{{if .FlashSuccess}}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <span class="mdi mdi-check-circle"></span> {{.FlashSuccess}}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{{end}}
+{{if .FlashWarn}}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <span class="mdi mdi-alert"></span> {{.FlashWarn}}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{{end}}
+
+{{if .StatusError}}
+<div class="alert alert-danger">
+    <span class="mdi mdi-alert-circle"></span>
+    <strong>Could not fetch deployment status.</strong>
+    Check that the cluster is reachable and the <code>pint</code> namespace is accessible.
+    <details class="mt-1">
+        <summary class="small text-muted" style="cursor:pointer">Technical details</summary>
+        <code class="small d-block mt-1">{{.StatusError}}</code>
+    </details>
+</div>
+{{end}}
+
+{{if .CertError}}
+<div class="alert alert-warning">
+    <span class="mdi mdi-certificate-outline"></span>
+    <strong>Could not read RadSec certificate.</strong>
+    <details class="mt-1">
+        <summary class="small text-muted" style="cursor:pointer">Technical details</summary>
+        <code class="small d-block mt-1">{{.CertError}}</code>
+    </details>
+</div>
+{{end}}
+
+<!-- Health overview -->
+<div class="health-grid">
+
+    <div class="health-tile">
+        <div class="health-tile-label"><span class="mdi mdi-server-outline"></span> Replicas</div>
+        {{if .Status}}
+        <div class="health-tile-value {{if eq .Status.ReadyReplicas .Status.DesiredReplicas}}text-success{{else}}text-danger{{end}}">
+            {{.Status.ReadyReplicas}}<span class="denom"> / {{.Status.DesiredReplicas}}</span>
+        </div>
+        <div class="health-tile-sub">ready / desired</div>
+        {{else}}
+        <div class="health-tile-value muted">—</div>
+        {{end}}
+    </div>
+
+    <div class="health-tile">
+        <div class="health-tile-label"><span class="mdi mdi-certificate-outline"></span> RadSec Cert</div>
+        {{if .Cert}}
+            {{if .Cert.IsExpired}}
+            <div class="health-tile-value text-danger">Expired</div>
+            {{else if .Cert.NearExpiry}}
+            <div class="health-tile-value text-warning">{{.Cert.DaysLeft}}<span class="denom">d left</span></div>
+            {{else}}
+            <div class="health-tile-value text-success">{{.Cert.DaysLeft}}<span class="denom">d</span></div>
+            {{end}}
+            <div class="health-tile-sub">{{.Cert.Expiry}}</div>
+        {{else}}
+        <div class="health-tile-value" style="color:var(--pint-muted)">—</div>
+        {{end}}
+    </div>
+
+    <div class="health-tile">
+        <div class="health-tile-label"><span class="mdi mdi-router-wireless"></span> Enrolled Clients</div>
+        <div class="health-tile-value">{{.ClientCount}}</div>
+        {{if .ClientNoIPCount}}
+        <div class="health-tile-sub text-warning"><span class="mdi mdi-alert"></span> {{.ClientNoIPCount}} without IP restriction</div>
+        {{else}}
+        <div class="health-tile-sub">NAS clients</div>
+        {{end}}
+    </div>
+
+</div>
+
+<!-- Deployment info bar -->
+{{if .Status}}
+<div class="deploy-bar">
+    <div>
+        <div class="deploy-item-label"><span class="mdi mdi-restart"></span> Last Restart</div>
+        <div class="deploy-item-value">
+            {{if .Status.LastRestartedAt}}{{.Status.LastRestartedAt}}{{else}}<span style="color:var(--pint-muted)">—</span>{{end}}
+        </div>
+    </div>
+    <div>
+        <div class="deploy-item-label"><span class="mdi mdi-docker"></span> Image</div>
+        <div class="deploy-item-value">
+            {{if .Status.Image}}<code>{{.Status.Image}}</code>{{else}}<span style="color:var(--pint-muted)">—</span>{{end}}
+        </div>
+    </div>
+</div>
+{{end}}
+
+<!-- Warning events -->
+{{if and .Status .Status.Events}}
+<div class="card mb-4 border-warning">
+    <div class="card-header text-warning" style="background:var(--pint-alt-header-bg);border-bottom:1px solid var(--pint-alt-header-border)">
+        <strong><span class="mdi mdi-alert-outline"></span> Warning Events</strong>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Reason</th><th>Message</th><th>Count</th><th>Last Seen</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Status.Events}}
+                <tr>
+                    <td><code>{{.Reason}}</code></td>
+                    <td class="small">{{.Message}}</td>
+                    <td>{{.Count}}</td>
+                    <td class="small" style="color:var(--pint-muted)">{{.LastSeen}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+
+<!-- Pods -->
+{{if .Status}}
+
+{{range .Status.Pods}}
+<div class="pod-card">
+
+    <div class="pod-card-head">
+        <span class="pod-name"><span class="mdi mdi-cube-outline me-1"></span>{{.Name}}</span>
+        <div class="pod-head-meta">
+            {{if .StartTime}}<span class="pod-uptime">up {{.Uptime}}</span>{{end}}
+            {{if gt .RestartCount 0}}
+            <span class="badge bg-warning text-dark"><span class="mdi mdi-restart"></span> {{.RestartCount}}</span>
+            {{end}}
+            {{if .Ready}}
+            <span class="badge bg-success">Ready</span>
+            {{else}}
+            <span class="badge bg-warning text-dark">Not Ready</span>
+            {{end}}
+            <span class="badge bg-secondary">{{.Phase}}</span>
+        </div>
+    </div>
+
+    <div class="pod-body">
+
+        {{if .StartTime}}
+        <div class="pod-started">Started {{.StartTime}}</div>
+        {{end}}
+
+        <!-- Resource strip -->
+        <div class="resource-strip">
+            {{if .Usage}}
+            <div class="resource-group">
+                <span class="resource-group-label">CPU</span>
+                <span class="resource-chip usage">{{.Usage.CPU}}</span>
+            </div>
+            <div class="resource-group">
+                <span class="resource-group-label">Mem</span>
+                <span class="resource-chip usage">{{.Usage.Memory}}</span>
+            </div>
+            {{if or .Requests.CPU .Requests.Memory}}<div class="resource-sep"></div>{{end}}
+            {{end}}
+            {{if .Requests.CPU}}
+            <div class="resource-group">
+                <span class="resource-group-label">CPU Req</span>
+                <span class="resource-chip">{{.Requests.CPU}}</span>
+            </div>
+            {{end}}
+            {{if .Requests.Memory}}
+            <div class="resource-group">
+                <span class="resource-group-label">Mem Req</span>
+                <span class="resource-chip">{{.Requests.Memory}}</span>
+            </div>
+            {{end}}
+            {{if or .Limits.CPU .Limits.Memory}}<div class="resource-sep"></div>{{end}}
+            {{if .Limits.CPU}}
+            <div class="resource-group">
+                <span class="resource-group-label">CPU Lim</span>
+                <span class="resource-chip">{{.Limits.CPU}}</span>
+            </div>
+            {{end}}
+            {{if .Limits.Memory}}
+            <div class="resource-group">
+                <span class="resource-group-label">Mem Lim</span>
+                <span class="resource-chip">{{.Limits.Memory}}</span>
+            </div>
+            {{end}}
+            {{if not .Usage}}{{if not .Requests.CPU}}{{if not .Requests.Memory}}{{if not .Limits.CPU}}{{if not .Limits.Memory}}
+            <span style="font-size:.75rem;color:var(--pint-muted)">Resource metrics unavailable</span>
+            {{end}}{{end}}{{end}}{{end}}{{end}}
+        </div>
+
+        <!-- Auth stats -->
+        {{if .Stats}}
+        <div class="stat-strip">
+            <div class="stat-cell">
+                <div class="stat-cell-label">Accepted</div>
+                <div class="stat-num {{if gt .Stats.AccessAccepts 0}}ok{{else}}muted{{end}}">{{.Stats.AccessAccepts}}</div>
+            </div>
+            <div class="stat-cell">
+                <div class="stat-cell-label">Rejected</div>
+                <div class="stat-num {{if gt .Stats.AccessRejects 0}}danger{{else}}muted{{end}}">{{.Stats.AccessRejects}}</div>
+            </div>
+            <div class="stat-cell">
+                <div class="stat-cell-label">Success</div>
+                {{if .Stats.HasOutcomes}}
+                <div class="stat-num {{if ge (.Stats.SuccessRate) 95}}ok{{else if ge (.Stats.SuccessRate) 80}}warn{{else}}danger{{end}}">{{.Stats.SuccessRate}}<span style="font-size:.9rem;font-weight:500;letter-spacing:0">%</span></div>
+                {{else}}
+                <div class="stat-num muted">—</div>
+                {{end}}
+            </div>
+            <div class="stat-cell error-group-start">
+                <div class="stat-cell-label">Malformed</div>
+                <div class="stat-num {{if gt .Stats.AuthMalformed 0}}warn{{else}}muted{{end}}">{{.Stats.AuthMalformed}}</div>
+            </div>
+            <div class="stat-cell">
+                <div class="stat-cell-label">Dropped</div>
+                <div class="stat-num {{if gt .Stats.AuthDropped 0}}danger{{else}}muted{{end}}">{{.Stats.AuthDropped}}</div>
+            </div>
+            <div class="stat-cell">
+                <div class="stat-cell-label">Invalid</div>
+                <div class="stat-num {{if gt .Stats.AuthInvalid 0}}danger{{else}}muted{{end}}">{{.Stats.AuthInvalid}}</div>
+            </div>
+            <div class="stat-cell">
+                <div class="stat-cell-label">Threads</div>
+                <div class="stat-thread-nums"
+                     data-active="{{.Stats.ThreadsActive}}"
+                     data-total="{{.Stats.ThreadsTotal}}">
+                    {{.Stats.ThreadsActive}}<span class="denom"> / {{.Stats.ThreadsTotal}}</span>
+                </div>
+                {{if gt .Stats.ThreadsTotal 0}}
+                <div class="thread-track">
+                    <div class="thread-fill js-thread-fill"></div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+
+    </div>
+
+    <!-- Logs -->
+    <div class="pod-logs-wrap">
+        <pre class="pod-logs">{{if .Logs}}{{.Logs}}{{else}}(no logs available){{end}}</pre>
+    </div>
+
+</div>
+{{end}}
+
+{{if not .Status.Pods}}
+<div class="alert alert-secondary">No pods found for this deployment.</div>
+{{end}}
+
+{{end}}
+
+{{if .IsRTP}}
+<div class="modal fade" id="reloadModal" tabindex="-1" aria-labelledby="reloadModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="reloadModalLabel"><span class="mdi mdi-restart"></span> Rollout Restart FreeRADIUS</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/status/reload">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div class="modal-body">
+                    <p>This will trigger a <strong>rolling restart</strong> of the FreeRADIUS deployment. Existing authenticated sessions will be briefly interrupted.</p>
+                    <p class="text-warning mb-0"><span class="mdi mdi-alert"></span> <strong>All connected home routers will lose access momentarily.</strong> Only restart if necessary.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning"><span class="mdi mdi-restart"></span> Restart Now</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.querySelectorAll('.js-thread-fill').forEach(function(fill) {
+    var nums = fill.closest('.stat-cell').querySelector('[data-active]');
+    if (!nums) return;
+    var active = parseInt(nums.dataset.active, 10) || 0;
+    var total  = parseInt(nums.dataset.total,  10) || 0;
+    fill.style.width = total > 0 ? (active / total * 100).toFixed(1) + '%' : '0%';
+});
+</script>
+{{end}}

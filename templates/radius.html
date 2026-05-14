@@ -19,7 +19,9 @@
           <dt class="col-sm-4"><span class="mdi mdi-ethernet"></span> Auth Port</dt>
           <dd class="col-sm-8"><code>2083</code></dd>
           <dt class="col-sm-4"><span class="mdi mdi-shield-lock"></span> Protocol</dt>
-          <dd class="col-sm-8">RadSec (RADIUS over TLS, RFC 6614)</dd>
+          <dd class="col-sm-8">RadSec (RADIUS over TLS)</dd>
+          <dt class="col-sm-4"><span class="mdi mdi-key-variant"></span> Shared Secret</dt>
+          <dd class="col-sm-8"><code>radsec</code></dd>
           <dt class="col-sm-4"><span class="mdi mdi-ip-network"></span> Source IP / CIDR</dt>
           {{if .IPCIDR}}
           <dd class="col-sm-8 mb-0"><code>{{.IPCIDR}}</code></dd>
@@ -35,21 +37,6 @@
       <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-key-chain"></span> Credentials</strong></div>
       <div class="card-body">
 
-        <!-- Shared Key -->
-        <h6><span class="mdi mdi-key-variant"></span> Shared Key</h6>
-        <div class="input-group mb-4">
-          <input type="password" id="shared-key" class="form-control" style="font-family: monospace;"
-                 value="{{.Client.Secret}}" readonly>
-          <button class="btn btn-secondary" type="button" onclick="toggleField('shared-key', this)" title="Show / Hide">
-            <span class="mdi mdi-eye"></span>
-          </button>
-          <button class="btn btn-secondary" type="button" onclick="copyInput('shared-key', this)" title="Copy">
-            <span class="mdi mdi-content-copy"></span>
-          </button>
-        </div>
-
-        <hr>
-
         <!-- Private Key -->
         <h6><span class="mdi mdi-lock"></span> Private Key</h6>
         {{if .KeyPEM}}
@@ -57,6 +44,9 @@
           <textarea id="field-key" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.KeyPEM}}</textarea>
           <button class="btn btn-secondary" type="button" onclick="copyTA('field-key', this)" title="Copy">
             <span class="mdi mdi-content-copy"></span>
+          </button>
+          <button class="btn btn-secondary" type="button" onclick="downloadTA('field-key', 'client.key')" title="Download">
+            <span class="mdi mdi-download"></span>
           </button>
         </div>
         {{else}}
@@ -97,6 +87,9 @@
           <button class="btn btn-secondary" type="button" onclick="copyTA('field-cert', this)" title="Copy">
             <span class="mdi mdi-content-copy"></span>
           </button>
+          <button class="btn btn-secondary" type="button" onclick="downloadTA('field-cert', 'client.crt')" title="Download">
+            <span class="mdi mdi-download"></span>
+          </button>
         </div>
         {{end}}
 
@@ -109,6 +102,9 @@
           <button class="btn btn-secondary" type="button" onclick="copyTA('field-ca', this)" title="Copy">
             <span class="mdi mdi-content-copy"></span>
           </button>
+          <a href="/radius/ca" download class="btn btn-secondary" title="Download">
+            <span class="mdi mdi-download"></span>
+          </a>
         </div>
 
       </div>
@@ -151,11 +147,11 @@
       <form method="POST" action="/radius/update-ip">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
-          <p class="text-muted">Set the IP address or CIDR your router connects from. Leave blank to allow from any IP.</p>
+          <p class="text-muted">Set the IP address your router connects from.</p>
           <div class="mb-0">
-            <label for="modal-ip-cidr" class="form-label">Source IP / CIDR</label>
+            <label for="modal-ip-cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
             <input type="text" class="form-control" id="modal-ip-cidr" name="ip_cidr"
-                   placeholder="e.g. 203.0.113.42 or 203.0.113.0/24"
+                   placeholder="e.g. 203.0.113.42" required
                    value="{{.IPCIDR}}">
           </div>
         </div>
@@ -225,16 +221,16 @@
       <dt class="col-sm-4">Auth Port</dt>
       <dd class="col-sm-8"><code>2083</code></dd>
       <dt class="col-sm-4">Protocol</dt>
-      <dd class="col-sm-8">RadSec (RADIUS over TLS, RFC 6614)</dd>
+      <dd class="col-sm-8">RadSec (RADIUS over TLS)</dd>
     </dl>
-    <p>Broadcast the CSH WiFi SSID from your home router. PINT will generate a shared secret, private key, and client certificate so your router can authenticate users against the CSH RADIUS server.</p>
+    <p>Broadcast the CSH WiFi SSID from your home router. PINT will generate a private key and client certificate so your router can authenticate users against the CSH RADIUS server over RadSec.</p>
     <form method="POST" action="/radius/secret">
       <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
       <div class="mb-3">
-        <label for="ip_cidr" class="form-label">Source IP / CIDR <span class="text-muted">(recommended)</span></label>
+        <label for="ip_cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
         <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
-               placeholder="e.g. 203.0.113.42 or 203.0.113.0/24">
-        <div class="form-text">Your router's external IP or subnet. Leave blank to allow from any IP (not recommended).</div>
+               placeholder="e.g. 203.0.113.42" required>
+        <div class="form-text">Your router's external IP address. Only connections from this IP will be accepted.</div>
       </div>
       <button type="submit" class="btn btn-primary"><span class="mdi mdi-key-plus"></span> Generate Credentials</button>
     </form>
@@ -245,18 +241,6 @@
 {{end}}
 {{define "scripts"}}
 <script>
-function toggleField(id, btn) {
-  var el = document.getElementById(id);
-  var icon = btn.querySelector('.mdi');
-  if (el.type === 'password') {
-    el.type = 'text';
-    icon.classList.replace('mdi-eye', 'mdi-eye-off');
-  } else {
-    el.type = 'password';
-    icon.classList.replace('mdi-eye-off', 'mdi-eye');
-  }
-}
-
 function flashCopied(btn) {
   var icon = btn.querySelector('.mdi');
   btn.classList.replace('btn-secondary', 'btn-success');
@@ -267,16 +251,18 @@ function flashCopied(btn) {
   }, 1500);
 }
 
-function copyInput(id, btn) {
+function copyTA(id, btn) {
   navigator.clipboard.writeText(document.getElementById(id).value).then(function() {
     flashCopied(btn);
   });
 }
 
-function copyTA(id, btn) {
-  navigator.clipboard.writeText(document.getElementById(id).value).then(function() {
-    flashCopied(btn);
-  });
+function downloadTA(id, filename) {
+  var text = document.getElementById(id).value;
+  var a = document.createElement('a');
+  a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
+  a.download = filename;
+  a.click();
 }
 </script>
 {{end}}

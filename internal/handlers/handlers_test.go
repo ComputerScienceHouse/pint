@@ -18,7 +18,7 @@ func init() { gin.SetMode(gin.TestMode) }
 func testTemplates() multitemplate.Render {
 	r := multitemplate.New()
 	layout := "../../templates/layout.html"
-	for _, page := range []string{"index", "dashboard", "profile", "radius"} {
+	for _, page := range []string{"index", "dashboard", "profile", "radius", "status", "admin_radius"} {
 		r.AddFromFiles(page+".html", layout, "../../templates/"+page+".html")
 	}
 	return r

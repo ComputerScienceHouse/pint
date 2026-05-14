@@ -11,7 +11,7 @@ import (
 func TestRenderClientsConf_WithIP(t *testing.T) {
 	ip := "192.168.1.0/24"
 	clients := []radius.RadiusClient{
-		{Username: "mbillow", Secret: "s3cr3t", IPCIDR: &ip},
+		{Username: "mbillow", IPCIDR: &ip},
 	}
 	out := radius.RenderClientsConf(clients)
 
@@ -21,8 +21,8 @@ func TestRenderClientsConf_WithIP(t *testing.T) {
 	if !strings.Contains(out, "ipaddr         = 192.168.1.0/24") {
 		t.Error("missing ipaddr")
 	}
-	if !strings.Contains(out, "secret         = s3cr3t") {
-		t.Error("missing secret")
+	if !strings.Contains(out, "secret         = radsec") {
+		t.Error("missing radsec secret")
 	}
 	if !strings.Contains(out, "proto          = tls") {
 		t.Error("missing proto = tls (required for RadSec)")
@@ -37,7 +37,7 @@ func TestRenderClientsConf_WithIP(t *testing.T) {
 
 func TestRenderClientsConf_NoIP(t *testing.T) {
 	clients := []radius.RadiusClient{
-		{Username: "jsmith", Secret: "abc", IPCIDR: nil},
+		{Username: "jsmith", IPCIDR: nil},
 	}
 	out := radius.RenderClientsConf(clients)
 
@@ -49,8 +49,8 @@ func TestRenderClientsConf_NoIP(t *testing.T) {
 func TestRenderClientsConf_MultipleClients(t *testing.T) {
 	ip := "10.0.0.0/8"
 	clients := []radius.RadiusClient{
-		{Username: "alice", Secret: "aaa", IPCIDR: &ip},
-		{Username: "bob", Secret: "bbb", IPCIDR: nil},
+		{Username: "alice", IPCIDR: &ip},
+		{Username: "bob", IPCIDR: nil},
 	}
 	out := radius.RenderClientsConf(clients)
 

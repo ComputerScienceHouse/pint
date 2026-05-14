@@ -17,7 +17,7 @@ func TestWriteRadiusConfig(t *testing.T) {
 	k8s := fake.NewSimpleClientset()
 
 	clients := []radius.RadiusClient{
-		{Username: "mbillow", Secret: "s3cr3t", IPCIDR: nil},
+		{Username: "mbillow", IPCIDR: nil},
 	}
 
 	err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-radius-config", clients)

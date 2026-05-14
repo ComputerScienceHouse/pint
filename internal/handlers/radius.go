@@ -2,10 +2,8 @@
 package handlers
 
 import (
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"log"
 	"net/http"
@@ -46,7 +44,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
-		ipCIDR, ok := parseIPCIDR(c)
+		ipCIDR, ok := parseMemberIP(c)
 		if !ok {
 			return
 		}
@@ -66,7 +64,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -98,7 +96,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -106,7 +104,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 	}
 }
 
-// UpdateIPHandler serves POST /radius/update-ip, changes source IP/CIDR only.
+// UpdateIPHandler serves POST /radius/update-ip, changes source IP only.
 func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
@@ -122,7 +120,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFu
 			return
 		}
 
-		ipCIDR, ok := parseIPCIDR(c)
+		ipCIDR, ok := parseMemberIP(c)
 		if !ok {
 			return
 		}
@@ -134,7 +132,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFu
 		}
 		store.Upsert(updated)
 
-		if err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -155,7 +153,7 @@ func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient
 		revokeExistingCert(ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
 		store.Delete(username)
 
-		if err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -188,31 +186,30 @@ func radiusPageData(c *gin.Context, nav navInfo, radiusServer string, client *ra
 }
 
 // commitStore saves the store, writes the RADIUS config, and reloads FreeRADIUS.
-// Reload errors are non-fatal and set as X-Reload-Warning. Returns true on success.
-func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Interface, cfg *config.Config) error {
+// Returns (reloadWarning, fatalErr). reloadWarning is non-empty when reload fails but
+// the store was saved successfully; fatalErr aborts the response and should cause the
+// caller to return immediately.
+// Member-facing callers discard the reload warning intentionally — only admin handlers surface it.
+func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Interface, cfg *config.Config) (string, error) {
 	ctx := c.Request.Context()
 	if err := store.Save(ctx); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return err
+		return "", err
 	}
 	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.RadiusConfigSecret, store.All()); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return err
+		return "", err
 	}
 	if err := radius.Reload(ctx, k8s, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-		c.Header("X-Reload-Warning", err.Error())
+		return err.Error(), nil
 	}
-	return nil
+	return "", nil
 }
 
-// issueClientCredentials generates a new shared secret, RSA key, and RadSec client cert.
+// issueClientCredentials generates an RSA key and RadSec client cert for username.
 // Returns the RadiusClient to store (no PEM fields), plus the one-time keyPEM and certPEM.
+// The RADIUS shared secret is always "radsec" and is not stored on the client.
 func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, username string) (*radius.RadiusClient, string, string, error) {
-	secret, err := generateSecret()
-	if err != nil {
-		return nil, "", "", err
-	}
-
 	privKey, csrPEM, err := profile.GenerateKeyAndCSR(username)
 	if err != nil {
 		return nil, "", "", err
@@ -242,7 +239,6 @@ func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, usern
 
 	entry := &radius.RadiusClient{
 		Username:      username,
-		Secret:        secret,
 		CertSerial:    cert.SerialNumber.String(),
 		CertSubject:   cert.Subject.CommonName,
 		CertIssuer:    cert.Issuer.CommonName,
@@ -277,24 +273,28 @@ func revokeExistingCert(ipaClient *freeipa.Client, client *radius.RadiusClient, 
 	}
 }
 
-// generateSecret returns a cryptographically random 32-hex-character secret.
-func generateSecret() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
+// parseMemberIP reads ip_cidr from POST form and requires a single bare IP address.
+// CIDR ranges are rejected — member clients must restrict to one specific IP.
+func parseMemberIP(c *gin.Context) (string, bool) {
+	raw := c.PostForm("ip_cidr")
+	if raw == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "a source IP address is required"})
+		return "", false
 	}
-	return hex.EncodeToString(b), nil
+	if _, err := netip.ParseAddr(raw); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "source IP must be a single IP address (not a CIDR range)"})
+		return "", false
+	}
+	return raw, true
 }
 
 // parseIPCIDR reads ip_cidr from the POST form, validates it, and returns it.
-// An empty value is allowed (means "any IP"). Returns ("", false) and writes a
-// 400 response if the value is present but not a valid CIDR prefix or bare IP.
+// An empty value is allowed (means "any IP"). Accepts a bare IP or CIDR prefix.
 func parseIPCIDR(c *gin.Context) (string, bool) {
 	raw := c.PostForm("ip_cidr")
 	if raw == "" {
 		return "", true
 	}
-	// Accept either a CIDR prefix (1.2.3.0/24) or a bare IP (1.2.3.4).
 	if _, err := netip.ParsePrefix(raw); err != nil {
 		if _, err2 := netip.ParseAddr(raw); err2 != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "ip_cidr must be a valid IP address or CIDR prefix"})

@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 const radSecRenewBefore = 30 * 24 * time.Hour
@@ -53,11 +54,34 @@ func main() {
 		log.Fatalf("kubernetes client: %v", err)
 	}
 
+	// Metrics client is optional; absent if metrics-server is not installed.
+	metricsClient, err := metricsv.NewForConfig(restCfg)
+	if err != nil {
+		log.Printf("metrics client unavailable (continuing without pod metrics): %v", err)
+		metricsClient = nil
+	}
+
 	// Initialize RADIUS secrets with empty content if they don't exist yet.
 	if err := radius.EnsureConfigSecrets(context.Background(), k8sClient, cfg.Namespace, cfg.RadiusClientsSecret, cfg.RadiusConfigSecret); err != nil {
 		log.Fatalf("init radius secrets: %v", err)
 	}
 
+	// Ensure FreeRADIUS status server is configured.
+	statusSecret, err := radius.EnsureStatusConfig(context.Background(), k8sClient, cfg.Namespace)
+	if err != nil {
+		log.Fatalf("ensure status secret: %v", err)
+	}
+	statusConf := radius.RenderStatusConfig("18121", statusSecret, "0.0.0.0/0")
+	updated, err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, "pint-freeradius-status-config", statusConf)
+	if err != nil {
+		log.Fatalf("write status config: %v", err)
+	}
+	if updated {
+		log.Printf("updated FreeRADIUS status config, triggering rollout restart")
+		if err := radius.Reload(context.Background(), k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
+			log.Printf("status config reload failed: %v", err)
+		}
+	}
 	// Fetch all three CA certs and the RadSec server cert in parallel.
 	var (
 		caDER           []byte
@@ -109,7 +133,7 @@ func main() {
 			cfg.ServerURL,
 			cfg.LoginURL,
 			cfg.CallbackURL,
-			[]string{"openid", "profile"},
+			[]string{"openid", "profile", "groups"},
 		)
 		if err != nil {
 			log.Fatalf("csh-auth init: %v", err)
@@ -139,6 +163,20 @@ func main() {
 		protected.POST("/radius/update-ip", handlers.UpdateIPHandler(cfg, k8sClient))
 		protected.POST("/radius/delete", handlers.DeleteSecretHandler(cfg, k8sClient, ipaClient))
 		protected.GET("/radius/ca", handlers.RadSecCAHandler(radSecCAChainPEM))
+
+		protected.GET("/status", handlers.StatusPageHandler(cfg, k8sClient, metricsClient))
+		protected.POST("/status/reload", handlers.ReloadHandler(cfg, k8sClient))
+
+		admin := protected.Group("/admin")
+		admin.Use(handlers.RequireRTP)
+		{
+			admin.GET("/radius", handlers.AdminRadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
+			admin.POST("/radius/delete", handlers.AdminDeleteHandler(cfg, k8sClient, ipaClient))
+			admin.POST("/radius/regenerate", handlers.AdminRegenerateHandler(ipaClient, cfg, k8sClient))
+			admin.POST("/radius/root/provision", handlers.AdminRootProvisionHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
+			admin.POST("/radius/root/regenerate", handlers.AdminRootRegenerateHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
+			admin.POST("/radius/root/update-ip", handlers.AdminRootUpdateIPHandler(cfg, k8sClient))
+		}
 	}
 
 	log.Printf("starting PINT on :8080")
@@ -150,7 +188,7 @@ func main() {
 func buildTemplates() multitemplate.Render {
 	r := multitemplate.New()
 	layout := "templates/layout.html"
-	for _, page := range []string{"index", "dashboard", "profile", "radius"} {
+	for _, page := range []string{"index", "dashboard", "profile", "radius", "status", "admin_radius"} {
 		r.AddFromFiles(page+".html", layout, "templates/"+page+".html")
 	}
 	return r

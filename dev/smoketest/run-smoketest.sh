@@ -38,11 +38,20 @@ echo "==> Fetching RadSec CA from cluster..."
 kubectl get secret pint-radsec-server -n "$NAMESPACE" \
     -o jsonpath='{.data.ca\.pem}' | base64 -d > "$D/radsec-ca.pem"
 
-echo "==> Issuing router client cert (RadSec CA)..."
-issue_cert "$D/router" "$PINT_IPA_RADSEC_CA_NAME" "/CN=smoketest-router"
+echo "==> Verifying organization controller is registered..."
+ROOT=$(kubectl get secret pint-radius-clients -n "$NAMESPACE" \
+    -o jsonpath='{.data.clients\.json}' 2>/dev/null | base64 -d \
+    | jq -r '.[] | select(.username == "root") | .username' 2>/dev/null)
+if [ -z "$ROOT" ]; then
+    echo "Error: organization controller (root) not registered — provision it via PINT admin first" >&2
+    exit 1
+fi
+
+echo "==> Issuing organization controller cert (RadSec CA)..."
+issue_cert "$D/router" "${PINT_IPA_RADSEC_CA_NAME:-radsec}" "/CN=root"
 
 echo "==> Issuing user WiFi cert (WiFi CA)..."
-issue_cert "$D/user" "$PINT_IPA_CA_NAME" "/CN=smoketest"
+issue_cert "$D/user" "${PINT_IPA_WIRELESS_CA_NAME:-wireless}" "/CN=smoketest"
 
 echo "==> Creating certs secret in cluster..."
 kubectl create secret generic "$SMOKETEST_POD-certs" -n "$NAMESPACE" \

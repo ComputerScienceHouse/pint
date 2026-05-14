@@ -23,6 +23,11 @@ spec:
           ports:
             - containerPort: 2083
               name: radsec
+            {{- if .Values.freeradius.statusServer.enabled }}
+            - containerPort: 18121
+              name: status
+              protocol: UDP
+            {{- end }}
           securityContext:
             {{- toYaml .Values.freeradius.securityContext | nindent 12 }}
           volumeMounts:
@@ -36,11 +41,8 @@ spec:
             - name: radsec-certs
               mountPath: /run/secrets/radsec-server
               readOnly: true
-            # Rendered radsec virtual server config (overrides the baked-in file).
-            # subPath keeps it as a single file; changes require a rollout restart.
-            - name: freeradius-config
-              mountPath: /etc/raddb/sites-available/radsec
-              subPath: radsec
+            - name: radius-status-config
+              mountPath: /run/secrets/radius-status
               readOnly: true
       volumes:
         - name: dynamic-clients
@@ -52,7 +54,8 @@ spec:
             secretName: {{ .Values.secrets.radSecCert }}
             optional: true
             defaultMode: 0444
-        - name: freeradius-config
-          configMap:
-            name: {{ include "pint.freeradiusFullname" . }}
+        - name: radius-status-config
+          secret:
+            secretName: {{ include "pint.freeradiusFullname" . }}-status-config
+            optional: true
 {{- end }}

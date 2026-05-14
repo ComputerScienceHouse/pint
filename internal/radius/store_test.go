@@ -22,7 +22,7 @@ func TestStore_UpsertAndLoad(t *testing.T) {
 	}
 
 	ipCIDR := "192.168.1.0/24"
-	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "s3cr3t", IPCIDR: &ipCIDR})
+	store.Upsert(radius.RadiusClient{Username: "mbillow", IPCIDR: &ipCIDR})
 
 	if err := store.Save(ctx); err != nil {
 		t.Fatalf("Save() error: %v", err)
@@ -37,9 +37,6 @@ func TestStore_UpsertAndLoad(t *testing.T) {
 	if c == nil {
 		t.Fatal("FindByUsername returned nil")
 	}
-	if c.Secret != "s3cr3t" {
-		t.Errorf("Secret = %q, want %q", c.Secret, "s3cr3t")
-	}
 	if c.IPCIDR == nil || *c.IPCIDR != "192.168.1.0/24" {
 		t.Errorf("IPCIDR = %v, want 192.168.1.0/24", c.IPCIDR)
 	}
@@ -53,12 +50,14 @@ func TestStore_UpsertOverwrites(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "old"})
-	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "new"})
+	ip1 := "10.0.0.1"
+	ip2 := "10.0.0.2"
+	store.Upsert(radius.RadiusClient{Username: "mbillow", IPCIDR: &ip1})
+	store.Upsert(radius.RadiusClient{Username: "mbillow", IPCIDR: &ip2})
 
 	c := store.FindByUsername("mbillow")
-	if c.Secret != "new" {
-		t.Errorf("Secret = %q, want %q", c.Secret, "new")
+	if c.IPCIDR == nil || *c.IPCIDR != ip2 {
+		t.Errorf("IPCIDR = %v, want %q", c.IPCIDR, ip2)
 	}
 	if store.Len() != 1 {
 		t.Errorf("Len() = %d, want 1", store.Len())
@@ -73,7 +72,7 @@ func TestStore_Delete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store.Upsert(radius.RadiusClient{Username: "mbillow", Secret: "s"})
+	store.Upsert(radius.RadiusClient{Username: "mbillow"})
 	store.Delete("mbillow")
 
 	if store.FindByUsername("mbillow") != nil {
@@ -87,6 +86,7 @@ func TestStore_LoadExisting(t *testing.T) {
 	existing := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: "pint-radius-clients", Namespace: "default"},
 		Data: map[string][]byte{
+			// legacy JSON with "secret" field is silently ignored on load
 			"clients.json": []byte(`[{"username":"jsmith","secret":"abc","ip_cidr":null}]`),
 		},
 	}

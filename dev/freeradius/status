@@ -1,0 +1,15 @@
+server status {
+    listen {
+        type    = status
+        ipaddr  = *
+        port    = 18121
+    }
+    $-INCLUDE /run/secrets/radius-status/status
+    authorize {
+        ok
+
+        Autz-Type Status-Server {
+            ok
+        }
+    }
+}

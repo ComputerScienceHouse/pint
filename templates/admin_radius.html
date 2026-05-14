@@ -1,0 +1,370 @@
+<!-- templates/admin_radius.html -->
+{{template "layout.html" .}}
+{{define "title"}}RADIUS Clients | PINT Admin{{end}}
+{{define "content"}}
+<div class="d-flex align-items-center mb-4">
+    <h4 class="mb-0"><span class="mdi mdi-shield-account"></span> RADIUS Clients</h4>
+    {{if .Clients}}<span class="badge bg-secondary ms-2">{{len .Clients}}</span>{{end}}
+</div>
+
+{{if .FlashSuccess}}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    <span class="mdi mdi-check-circle"></span> {{.FlashSuccess}}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{{end}}
+{{if .FlashWarn}}
+<div class="alert alert-warning alert-dismissible fade show" role="alert">
+    <span class="mdi mdi-alert"></span> {{.FlashWarn}}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{{end}}
+
+<!-- ── Organization Controller ─────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header d-flex align-items-center justify-content-between"
+         style="background:var(--pint-alt-header-bg);border-bottom:1px solid var(--pint-alt-header-border)">
+        <strong><span class="mdi mdi-office-building-outline me-1"></span> Organization Controller</strong>
+        <span class="badge bg-secondary" style="font-size:.7rem;font-weight:600;letter-spacing:.04em">CSH WiFi Infrastructure</span>
+    </div>
+    <div class="card-body">
+
+    {{if .RootClient}}
+
+        {{/* ── One-time credential display after provision / regen ── */}}
+        {{if .RootKeyPEM}}
+        <div class="alert alert-warning mb-3">
+            <strong><span class="mdi mdi-key-alert-outline"></span> Save these credentials now.</strong>
+            The private key will not be shown again. The RADIUS shared secret is always <code>radsec</code>.
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold small">Private Key <span class="text-muted fw-normal">(PEM)</span></label>
+            <div class="input-group align-items-start">
+                <textarea class="form-control font-monospace" rows="6" readonly style="font-size:.72rem;resize:none">{{.RootKeyPEM}}</textarea>
+                <button class="btn btn-outline-secondary" type="button" onclick="copyField(this)" title="Copy">
+                    <span class="mdi mdi-content-copy"></span>
+                </button>
+                <button class="btn btn-outline-secondary" type="button" onclick="downloadField(this, 'root.key')" title="Download">
+                    <span class="mdi mdi-download"></span>
+                </button>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label fw-semibold small">Certificate <span class="text-muted fw-normal">(PEM)</span></label>
+            <div class="input-group align-items-start">
+                <textarea class="form-control font-monospace" rows="6" readonly style="font-size:.72rem;resize:none">{{.RootCertPEM}}</textarea>
+                <button class="btn btn-outline-secondary" type="button" onclick="copyField(this)" title="Copy">
+                    <span class="mdi mdi-content-copy"></span>
+                </button>
+                <button class="btn btn-outline-secondary" type="button" onclick="downloadField(this, 'root.crt')" title="Download">
+                    <span class="mdi mdi-download"></span>
+                </button>
+            </div>
+        </div>
+        <div class="mb-3">
+            <a href="/radius/ca" download class="btn btn-outline-secondary btn-sm">
+                <span class="mdi mdi-download me-1"></span>Download CA Chain
+            </a>
+        </div>
+        <hr>
+        {{end}}
+
+        {{/* ── Current status ── */}}
+        <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+                <div class="small text-muted text-uppercase fw-semibold mb-1" style="font-size:.65rem;letter-spacing:.08em">Source IP / CIDR</div>
+                {{if .RootClient.IPCIDR}}
+                <code>{{.RootClient.IPCIDR}}</code>
+                {{else}}
+                <span class="text-warning"><span class="mdi mdi-alert"></span> Unrestricted</span>
+                {{end}}
+            </div>
+            <div class="col-sm-4">
+                <div class="small text-muted text-uppercase fw-semibold mb-1" style="font-size:.65rem;letter-spacing:.08em">Certificate</div>
+                {{if .RootClient.CertNotAfter}}
+                    {{if .RootClient.CertIsExpired}}
+                    <span class="text-danger fw-semibold"><span class="mdi mdi-certificate-outline"></span> Expired</span>
+                    <div class="text-muted" style="font-size:.75rem">{{.RootClient.CertNotAfter}}</div>
+                    {{else if .RootClient.CertNearExpiry}}
+                    <span class="text-warning fw-semibold">{{.RootClient.CertDaysLeft}}d left</span>
+                    <div class="text-muted" style="font-size:.75rem">{{.RootClient.CertNotAfter}}</div>
+                    {{else}}
+                    <span class="text-success">{{.RootClient.CertDaysLeft}}d left</span>
+                    <div class="text-muted" style="font-size:.75rem">{{.RootClient.CertNotAfter}}</div>
+                    {{end}}
+                {{else}}—{{end}}
+            </div>
+            <div class="col-sm-4">
+                <div class="small text-muted text-uppercase fw-semibold mb-1" style="font-size:.65rem;letter-spacing:.08em">RADIUS Secret</div>
+                <code>radsec</code>
+            </div>
+        </div>
+
+        {{/* ── Update IP form ── */}}
+        <form method="POST" action="/admin/radius/root/update-ip" class="d-flex gap-2 align-items-end mb-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="flex-grow-1" style="max-width:22rem">
+                <label class="form-label small mb-1" for="root-ip-cidr">Source IP / CIDR restriction</label>
+                <input type="text" id="root-ip-cidr" name="ip_cidr" class="form-control form-control-sm font-monospace"
+                       placeholder="e.g. 192.168.1.0/24 or leave blank for any"
+                       value="{{if .RootClient.IPCIDR}}{{.RootClient.IPCIDR}}{{end}}">
+            </div>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">
+                <span class="mdi mdi-content-save-outline me-1"></span>Update IP
+            </button>
+        </form>
+
+        {{/* ── Regen / Delete buttons ── */}}
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-warning btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#rootRegenModal">
+                <span class="mdi mdi-autorenew me-1"></span>Regenerate Credentials
+            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#rootDeleteModal">
+                <span class="mdi mdi-delete-outline me-1"></span>Deprovision
+            </button>
+        </div>
+
+    {{else}}
+
+        <p class="text-muted mb-3">
+            The CSH WiFi controller is not yet enrolled. Provisioning will issue a dedicated
+            RADIUS secret and certificate for the organization-owned access point — not tied
+            to any member account.
+        </p>
+        <button type="button" class="btn btn-primary btn-sm"
+                data-bs-toggle="modal" data-bs-target="#rootProvisionModal">
+            <span class="mdi mdi-plus-circle-outline me-1"></span>Provision Controller
+        </button>
+
+    {{end}}
+    </div>
+</div>
+
+<!-- ── Member RADIUS Clients ───────────────────────────────────────────── -->
+<h6 class="text-muted text-uppercase fw-semibold mb-2" style="font-size:.7rem;letter-spacing:.08em">
+    <span class="mdi mdi-account-group-outline me-1"></span>Member Clients
+</h6>
+
+{{if .Clients}}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Source IP / CIDR</th>
+                    <th>Cert Subject</th>
+                    <th>Cert Expires</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Clients}}
+                <tr>
+                    <td style="max-width: 12rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><strong>{{.Username}}</strong></td>
+                    <td>
+                        {{if .IPCIDR}}<code>{{.IPCIDR}}</code>{{else}}<span class="text-warning"><span class="mdi mdi-alert"></span> Any</span>{{end}}
+                    </td>
+                    <td style="max-width: 16rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{.CertSubject}}"><code class="small">{{.CertSubject}}</code></td>
+                    <td class="small text-nowrap">
+                        {{if .CertNotAfter}}
+                            {{if .CertIsExpired}}
+                            <span class="text-danger fw-semibold"><span class="mdi mdi-certificate-outline"></span> Expired</span>
+                            <div class="text-muted" style="font-size: 0.75rem;">{{.CertNotAfter}}</div>
+                            {{else if .CertNearExpiry}}
+                            <span class="text-warning fw-semibold">{{.CertDaysLeft}}d left</span>
+                            <div class="text-muted" style="font-size: 0.75rem;">{{.CertNotAfter}}</div>
+                            {{else}}
+                            <span class="text-success">{{.CertDaysLeft}}d left</span>
+                            <div class="text-muted" style="font-size: 0.75rem;">{{.CertNotAfter}}</div>
+                            {{end}}
+                        {{else}}—{{end}}
+                    </td>
+                    <td class="text-end text-nowrap">
+                        <button type="button"
+                                class="btn btn-outline-warning btn-sm me-1"
+                                data-bs-toggle="modal"
+                                data-bs-target="#regenModal-{{.Username}}"
+                                aria-label="Regenerate credentials for {{.Username}}">
+                            <span class="mdi mdi-autorenew" aria-hidden="true"></span> Regenerate
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-danger btn-sm"
+                                data-bs-toggle="modal"
+                                data-bs-target="#deleteModal-{{.Username}}"
+                                aria-label="Remove {{.Username}}">
+                            <span class="mdi mdi-delete-outline" aria-hidden="true"></span> Remove
+                        </button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Per-user modals -->
+{{range .Clients}}
+
+<!-- Regenerate modal -->
+<div class="modal fade" id="regenModal-{{.Username}}" tabindex="-1" aria-labelledby="regenModalLabel-{{.Username}}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="regenModalLabel-{{.Username}}">Regenerate Credentials — {{.Username}}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/admin/radius/regenerate">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <input type="hidden" name="username" value="{{.Username}}">
+                <div class="modal-body">
+                    <p>This will <strong>revoke {{.Username}}'s current certificate</strong> and issue new credentials. Their source IP setting will be preserved.</p>
+                    <p class="text-warning mb-0"><span class="mdi mdi-alert"></span> <strong>Their router will lose access to CSH WiFi until they re-enroll with the new credentials.</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning"><span class="mdi mdi-autorenew"></span> Regenerate</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete modal -->
+<div class="modal fade" id="deleteModal-{{.Username}}" tabindex="-1" aria-labelledby="deleteModalLabel-{{.Username}}" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel-{{.Username}}">Remove Client — {{.Username}}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/admin/radius/delete">
+                <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                <input type="hidden" name="username" value="{{.Username}}">
+                <div class="modal-body">
+                    <p>This will <strong>revoke {{.Username}}'s certificate</strong> and remove their RADIUS configuration.</p>
+                    <p class="text-danger mb-0"><span class="mdi mdi-alert-circle"></span> <strong>Their router will immediately stop accepting CSH WiFi logins.</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><span class="mdi mdi-delete-outline"></span> Remove</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{end}}
+
+{{else}}
+<div class="alert alert-secondary">
+    <span class="mdi mdi-information-outline"></span> No member RADIUS clients are currently enrolled.
+</div>
+{{end}}
+
+<!-- ── Org controller modals ──────────────────────────────────────────── -->
+
+<!-- Provision modal -->
+<div class="modal fade" id="rootProvisionModal" tabindex="-1" aria-labelledby="rootProvisionModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rootProvisionModalLabel">
+                    <span class="mdi mdi-office-building-outline me-1"></span>Provision Organization Controller
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/admin/radius/root/provision">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div class="modal-body">
+                    <p>This will issue a <strong>RADIUS secret and EAP-TLS certificate</strong> for the CSH WiFi controller. The credentials will be displayed once — save them immediately.</p>
+                    <p class="mb-0 text-muted small">The client will be stored under the reserved username <code>root</code> and is not linked to any member account.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="mdi mdi-plus-circle-outline me-1"></span>Provision
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Regen modal -->
+<div class="modal fade" id="rootRegenModal" tabindex="-1" aria-labelledby="rootRegenModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rootRegenModalLabel">Regenerate — Organization Controller</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/admin/radius/root/regenerate">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <div class="modal-body">
+                    <p>This will <strong>revoke the current certificate</strong> and issue a new RADIUS secret and cert for the CSH WiFi controller. The new credentials will be displayed once.</p>
+                    <p class="text-warning mb-0"><span class="mdi mdi-alert"></span> <strong>The controller will lose WiFi access until it is reconfigured with the new credentials.</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <span class="mdi mdi-autorenew me-1"></span>Regenerate
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete / deprovision modal -->
+<div class="modal fade" id="rootDeleteModal" tabindex="-1" aria-labelledby="rootDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rootDeleteModalLabel">Deprovision — Organization Controller</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="/admin/radius/delete">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <input type="hidden" name="username" value="root">
+                <div class="modal-body">
+                    <p>This will <strong>revoke the certificate</strong> and remove all RADIUS credentials for the CSH WiFi controller.</p>
+                    <p class="text-danger mb-0"><span class="mdi mdi-alert-circle"></span> <strong>The controller will immediately stop accepting CSH WiFi logins.</strong></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <span class="mdi mdi-delete-outline me-1"></span>Deprovision
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{{end}}
+
+{{define "scripts"}}
+<script>
+function fieldValue(btn) {
+    return btn.closest('.input-group').querySelector('textarea, input[type="text"]').value;
+}
+
+function copyField(btn) {
+    navigator.clipboard.writeText(fieldValue(btn)).then(function() {
+        var icon = btn.querySelector('.mdi');
+        icon.classList.replace('mdi-content-copy', 'mdi-check');
+        setTimeout(function() { icon.classList.replace('mdi-check', 'mdi-content-copy'); }, 1500);
+    });
+}
+
+function downloadField(btn, filename) {
+    var a = document.createElement('a');
+    a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(fieldValue(btn));
+    a.download = filename;
+    a.click();
+}
+</script>
+{{end}}

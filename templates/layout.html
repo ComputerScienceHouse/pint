@@ -141,6 +141,19 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarUser">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .CurrentPath "/dashboard"}} active" aria-current="page{{end}}" href="/dashboard"><span class="mdi mdi-view-dashboard-outline"></span> Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .CurrentPath "/status"}} active" aria-current="page{{end}}" href="/status"><span class="mdi mdi-pulse"></span> Status</a>
+                </li>
+                {{if .IsRTP}}
+                <li class="nav-item">
+                    <a class="nav-link{{if eq .CurrentPath "/admin/radius"}} active" aria-current="page{{end}}" href="/admin/radius"><span class="mdi mdi-shield-account"></span> Admin</a>
+                </li>
+                {{end}}
+            </ul>
             <ul class="navbar-nav ms-auto">
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#"

@@ -200,6 +200,22 @@
               "description": "NodePort number. Only used when service.type is NodePort."
             }
           }
+        },
+        "statusServer": {
+          "type": "object",
+          "description": "FreeRADIUS status virtual server for PINT auth statistics.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable the FreeRADIUS status virtual server and PINT statistics queries.",
+              "default": true
+            },
+            "clientCIDR": {
+              "type": "string",
+              "description": "Source CIDR allowed to query the status server.",
+              "default": "0.0.0.0/0"
+            }
+          }
         }
       }
     },

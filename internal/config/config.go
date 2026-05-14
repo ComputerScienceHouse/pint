@@ -21,9 +21,9 @@ type Config struct {
 	IPAWirelessCAName       string
 	RadSecCAName            string // PINT_IPA_RADSEC_CA_NAME:FreeIPA intermediate CA for RadSec certs
 	RootCAName              string // PINT_IPA_ROOT_CA_NAME:signing root CA; defaults to "ipa"
-	IPACertProfile          string // PINT_IPA_CERT_PROFILE:FreeIPA profile for WiFi client certs (optional)
-	RadSecClientCertProfile string // PINT_IPA_RADSEC_CLIENT_CERT_PROFILE:FreeIPA profile for RadSec router client certs (optional)
-	RadSecServerCertProfile string // PINT_IPA_RADSEC_SERVER_CERT_PROFILE:FreeIPA profile for FreeRADIUS server cert (optional)
+	IPACertProfile          string // PINT_IPA_CERT_PROFILE:FreeIPA profile for WiFi client certs (default: pint_wifi)
+	RadSecClientCertProfile string // PINT_IPA_RADSEC_CLIENT_CERT_PROFILE:FreeIPA profile for RadSec router client certs (default: pint_radsec_client)
+	RadSecServerCertProfile string // PINT_IPA_RADSEC_SERVER_CERT_PROFILE:FreeIPA profile for FreeRADIUS server cert (default: pint_radsec_server)
 	IPAPrincipal            string // derived: full principal, e.g. pint/host@REALM
 	IPAServiceHostname      string // derived: hostname portion of principal, e.g. host
 	IPASkipTLSVerify        bool
@@ -37,6 +37,11 @@ type Config struct {
 	RadiusConfigSecret    string
 	RadSecCertSecret      string // PINT_RADSEC_CERT_SECRET:K8s Secret storing FreeRADIUS TLS cert+key
 	FreeRADIUSDeployment string
+
+	// FreeRADIUS status virtual server
+	RADIUSStatusPort string // PINT_RADIUS_STATUS_PORT: port for the FreeRADIUS status virtual server
+	RADIUSStatusAddr string // PINT_RADIUS_STATUS_ADDR: override address (host:port) for status queries; replaces per-pod IP (useful when pod IPs are unreachable, e.g. local dev against kind)
+
 
 	// UI
 	RadiusServer string
@@ -80,6 +85,9 @@ func Load() (*Config, error) {
 	cfg.RadSecCertSecret = optional("PINT_RADSEC_CERT_SECRET", "pint-radsec-server")
 	cfg.FreeRADIUSDeployment = optional("PINT_FREERADIUS_DEPLOYMENT", "pint-freeradius")
 	cfg.RadiusServer = require("PINT_RADIUS_SERVER")
+	cfg.RADIUSStatusPort = optional("PINT_RADIUS_STATUS_PORT", "18121")
+	cfg.RADIUSStatusAddr = optional("PINT_RADIUS_STATUS_ADDR", "")
+
 
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required environment variables: %v", missing)
@@ -91,9 +99,9 @@ func Load() (*Config, error) {
 	if cfg.RootCAName == "" {
 		cfg.RootCAName = "ipa"
 	}
-	cfg.IPACertProfile = os.Getenv("PINT_IPA_CERT_PROFILE")
-	cfg.RadSecClientCertProfile = os.Getenv("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE")
-	cfg.RadSecServerCertProfile = os.Getenv("PINT_IPA_RADSEC_SERVER_CERT_PROFILE")
+	cfg.IPACertProfile = optional("PINT_IPA_CERT_PROFILE", "pint_wifi")
+	cfg.RadSecClientCertProfile = optional("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE", "pint_radsec_client")
+	cfg.RadSecServerCertProfile = optional("PINT_IPA_RADSEC_SERVER_CERT_PROFILE", "pint_radsec_server")
 	cfg.LoginURL = cfg.ServerURL + "/auth/login"
 	cfg.CallbackURL = cfg.ServerURL + "/auth/callback"
 	cfg.IPAPrincipal = principalFromDN(cfg.IPAServiceAccount)

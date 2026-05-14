@@ -1,4 +1,4 @@
-.PHONY: build test lint dev dev-stop dev-setup dev-cluster dev-freeradius dev-secret dev-logs dev-forward radsec-smoketest clean
+.PHONY: build test lint dev dev-stop dev-setup dev-cluster dev-freeradius dev-metrics dev-secret dev-logs dev-forward radsec-smoketest clean
 
 BINARY          = pint
 STUB            = freeipa-stub
@@ -28,9 +28,10 @@ dev: build build-stub
 
 # ── Kubernetes dev cluster ─────────────────────────────────────────────────────
 
-# Full one-shot setup: create kind cluster, deploy chart, build FreeRADIUS image.
+# Full one-shot setup: create kind cluster, deploy chart, build FreeRADIUS image,
+# and install metrics-server so the /status page shows pod CPU/memory.
 # Run once before 'make dev'.  Safe to re-run (idempotent).
-dev-setup: dev-cluster dev-freeradius
+dev-setup: dev-cluster dev-freeradius dev-metrics
 	@echo ""
 	@echo "Dev cluster ready.  Fill in .env.dev then run:  make dev"
 	@echo "To watch FreeRADIUS:                            make dev-logs"
@@ -45,6 +46,15 @@ dev-cluster:
 		--namespace $(NAMESPACE) \
 		--create-namespace \
 		--values chart/values-dev.yaml
+
+# Install metrics-server in the kind cluster with --kubelet-insecure-tls so the
+# /status page can show pod CPU/memory usage.  Safe to re-run.
+dev-metrics:
+	kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+	kubectl patch deployment metrics-server -n kube-system \
+		--type='json' \
+		-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+	kubectl rollout status deployment/metrics-server -n kube-system --timeout=90s
 
 # Build FreeRADIUS dev image, load it into kind, and trigger a rollout.
 dev-freeradius:

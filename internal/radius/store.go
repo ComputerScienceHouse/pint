@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -13,9 +14,9 @@ import (
 )
 
 // RadiusClient represents one home-router RADIUS entry.
+// The RADIUS shared secret is always "radsec" and is not stored here.
 type RadiusClient struct {
 	Username      string   `json:"username"`
-	Secret        string   `json:"secret"`
 	IPCIDR        *string  `json:"ip_cidr"`
 	CertSerial    string   `json:"cert_serial,omitempty"`
 	CertSubject   string   `json:"cert_subject,omitempty"`
@@ -25,6 +26,24 @@ type RadiusClient struct {
 	CertKeyBits   int      `json:"cert_key_bits,omitempty"`
 	CertEKUs      []string `json:"cert_ekus,omitempty"`
 }
+
+// CertDaysLeft returns the number of days until the client cert expires (negative if expired).
+func (c RadiusClient) CertDaysLeft() int {
+	if c.CertNotAfter == "" {
+		return 0
+	}
+	t, err := time.Parse(time.RFC1123, c.CertNotAfter)
+	if err != nil {
+		return 0
+	}
+	return int(time.Until(t).Hours() / 24)
+}
+
+// CertIsExpired reports whether the client cert has expired.
+func (c RadiusClient) CertIsExpired() bool { return c.CertNotAfter != "" && c.CertDaysLeft() <= 0 }
+
+// CertNearExpiry reports whether the client cert expires within 30 days.
+func (c RadiusClient) CertNearExpiry() bool { d := c.CertDaysLeft(); return d > 0 && d <= 30 }
 
 // ClientStore is a Kubernetes-Secret-backed list of RadiusClient entries.
 type ClientStore struct {

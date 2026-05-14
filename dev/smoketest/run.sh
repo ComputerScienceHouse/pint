@@ -81,7 +81,7 @@ realm radsec {
 }
 EOF
 
-# Accept eapol_test on loopback
+# Accept eapol_test on loopback — secret must match the -s flag passed to eapol_test
 cat > ${RADDB}/clients.conf << 'EOF'
 client localhost {
     ipaddr = 127.0.0.1
