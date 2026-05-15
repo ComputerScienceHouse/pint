@@ -69,18 +69,24 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 
 		switch platform {
 		case "ios":
-			p12, err := profile.BuildPKCS12(privKey, certDER, caDER)
+			p12Password, err := profile.RandomPassword()
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "password generation failed"})
+				return
+			}
+			p12, err := profile.BuildPKCS12(privKey, certDER, caDER, p12Password)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "PKCS12 build failed"})
 				return
 			}
 			radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
 			mc, err := profile.BuildMobileconfig(profile.MobileconfigParams{
-				SSID:        cfg.WiFiSSID,
-				RadiusHost:  radiusHost,
-				PKCS12Bytes: p12,
-				CACertDER:   caDER,
-				Username:    username,
+				SSID:           cfg.WiFiSSID,
+				RadiusHost:     radiusHost,
+				PKCS12Bytes:    p12,
+				PKCS12Password: p12Password,
+				CACertDER:      caDER,
+				Username:       username,
 			})
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "mobileconfig build failed"})
@@ -90,7 +96,7 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 			c.Data(http.StatusOK, "application/x-apple-aspen-config", mc)
 
 		case "android":
-			p12, err := profile.BuildPKCS12(privKey, certDER, caDER)
+			p12, err := profile.BuildPKCS12(privKey, certDER, caDER, "")
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "PKCS12 build failed"})
 				return

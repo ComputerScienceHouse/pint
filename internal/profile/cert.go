@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"fmt"
 
@@ -33,9 +34,18 @@ func GenerateKeyAndCSR(commonName string) (*ecdsa.PrivateKey, []byte, error) {
 	return key, csrPEM, nil
 }
 
+// RandomPassword generates a 32-character hex password for PKCS#12 archives.
+func RandomPassword() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate password: %w", err)
+	}
+	return hex.EncodeToString(b), nil
+}
+
 // BuildPKCS12 bundles the private key, leaf certificate DER, and CA certificate DER
-// into a PKCS#12 archive with no passphrase.
-func BuildPKCS12(key crypto.Signer, certDER, caDER []byte) ([]byte, error) {
+// into a PKCS#12 archive protected by password.
+func BuildPKCS12(key crypto.Signer, certDER, caDER []byte, password string) ([]byte, error) {
 	cert, err := x509.ParseCertificate(certDER)
 	if err != nil {
 		return nil, fmt.Errorf("parse cert: %w", err)
@@ -45,7 +55,7 @@ func BuildPKCS12(key crypto.Signer, certDER, caDER []byte) ([]byte, error) {
 		return nil, fmt.Errorf("parse CA cert: %w", err)
 	}
 
-	p12, err := pkcs12.Legacy.Encode(key, cert, []*x509.Certificate{ca}, "")
+	p12, err := pkcs12.Modern.Encode(key, cert, []*x509.Certificate{ca}, password)
 	if err != nil {
 		return nil, fmt.Errorf("encode PKCS12: %w", err)
 	}

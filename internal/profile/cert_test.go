@@ -42,7 +42,7 @@ func TestBuildPKCS12(t *testing.T) {
 	// Build a stub leaf cert DER signed with our key
 	certDER, caDER := StubCertAndCA(t, key)
 
-	p12, err := profile.BuildPKCS12(key, certDER, caDER)
+	p12, err := profile.BuildPKCS12(key, certDER, caDER, "")
 	if err != nil {
 		t.Fatalf("BuildPKCS12() error: %v", err)
 	}

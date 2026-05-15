@@ -17,7 +17,7 @@ func TestBuildMobileconfig_ContainsSSID(t *testing.T) {
 		t.Fatal(err)
 	}
 	certDER, caDER := StubCertAndCA(t, key)
-	p12, err := profile.BuildPKCS12(key, certDER, caDER)
+	p12, err := profile.BuildPKCS12(key, certDER, caDER, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestBuildMobileconfig_ContainsPayloadTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	certDER, caDER := StubCertAndCA(t, key)
-	p12, err := profile.BuildPKCS12(key, certDER, caDER)
+	p12, err := profile.BuildPKCS12(key, certDER, caDER, "")
 	if err != nil {
 		t.Fatal(err)
 	}

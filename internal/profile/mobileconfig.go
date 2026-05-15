@@ -10,11 +10,12 @@ import (
 
 // MobileconfigParams holds the data needed to build an Apple Configuration Profile.
 type MobileconfigParams struct {
-	SSID        string
-	RadiusHost  string // hostname only, no port
-	PKCS12Bytes []byte
-	CACertDER   []byte
-	Username    string
+	SSID            string
+	RadiusHost      string // hostname only, no port
+	PKCS12Bytes     []byte
+	PKCS12Password  string
+	CACertDER       []byte
+	Username        string
 }
 
 // BuildMobileconfig returns a plist-encoded Apple Configuration Profile
@@ -48,7 +49,7 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 		"PayloadVersion":     1,
 		"PayloadDisplayName": "CSH WiFi Client Certificate",
 		"PayloadContent":     p.PKCS12Bytes,
-		"Password":           "",
+		"Password":           p.PKCS12Password,
 	}
 
 	caPayload := map[string]interface{}{
