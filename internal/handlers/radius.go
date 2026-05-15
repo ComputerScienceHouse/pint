@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -171,7 +172,12 @@ func RadSecCAHandler(caChainPEM string) gin.HandlerFunc {
 func radiusPageData(c *gin.Context, nav navInfo, radiusServer string, client *radius.RadiusClient, caPEM, keyPEM, certPEM string) gin.H {
 	data := nav.toMap()
 	data["CSRFToken"] = c.GetString(csrfContextKey)
-	data["RadiusServer"] = radiusServer
+	host, port, _ := net.SplitHostPort(radiusServer)
+	if host == "" {
+		host = radiusServer
+	}
+	data["RadiusServer"] = host
+	data["RadiusPort"] = port
 	data["Client"] = client
 	data["CACertPEM"] = caPEM
 	data["KeyPEM"] = keyPEM
