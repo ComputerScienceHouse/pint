@@ -14,6 +14,6 @@ func IndexHandler(loginURL string) gin.HandlerFunc {
 			c.Redirect(http.StatusFound, "/dashboard")
 			return
 		}
-		c.Redirect(http.StatusFound, loginURL)
+		c.Redirect(http.StatusFound, loginURL+"?referer=/dashboard")
 	}
 }
