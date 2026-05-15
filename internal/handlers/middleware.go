@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,11 @@ import (
 // appearing in logs. The authenticated username is included when available.
 func ZapLogger(log *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.UserAgent(), "kube-probe/") {
+			c.Next()
+			return
+		}
+
 		start := time.Now()
 		path := c.Request.URL.Path
 
@@ -33,6 +39,7 @@ func ZapLogger(log *zap.Logger) gin.HandlerFunc {
 			zap.Int("status", c.Writer.Status()),
 			zap.Duration("latency", time.Since(start)),
 			zap.String("ip", c.ClientIP()),
+			zap.String("user_agent", c.Request.UserAgent()),
 		}
 		if redacted {
 			fields = append(fields, zap.Bool("query_redacted", true))
