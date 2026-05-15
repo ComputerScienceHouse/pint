@@ -1,96 +1,168 @@
 <!-- templates/profile.html -->
 {{template "layout.html" .}}
-{{define "title"}}WiFi Profile | PINT{{end}}
+{{define "title"}}WiFi Profile{{end}}
 {{define "content"}}
-<h2><span class="mdi mdi-wifi-lock"></span> Your WiFi Profile</h2>
-<p class="text-muted mb-4">Certificates are generated fresh on each download and are valid for 5 years.</p>
+<style>
+.profile-section {
+  border: 1px solid var(--pint-border);
+  border-left-width: 3px;
+  border-radius: .5rem;
+  background: var(--pint-surface);
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
 
-<div class="card mt-3">
-    <div class="card-header bg-primary text-white">
-        <strong><span class="mdi mdi-apple"></span> iOS &amp; macOS</strong>
+.profile-section-head {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .65rem 1.25rem;
+  border-bottom: 1px solid var(--pint-border);
+  background: var(--pint-alt-header-bg);
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--pint-muted-strong);
+}
+
+.profile-section-head .mdi {
+  color: var(--platform-color, var(--pint-muted-strong));
+  font-size: 1em;
+}
+
+.profile-ios   { --platform-color: var(--bs-primary); border-left-color: var(--bs-primary); }
+.profile-android { --platform-color: var(--bs-success); border-left-color: var(--bs-success); }
+.profile-windows { --platform-color: #6c757d;           border-left-color: #6c757d; }
+.profile-linux { --platform-color: var(--bs-info);    border-left-color: var(--bs-info); }
+
+.profile-section-body {
+  padding: 1.25rem;
+}
+
+.profile-desc {
+  font-size: .875rem;
+  color: var(--pint-muted);
+  margin-bottom: 1rem;
+  line-height: 1.55;
+}
+
+.profile-desc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.profile-desc li + li {
+  margin-top: .375rem;
+}
+
+.profile-config-label {
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--pint-muted-strong);
+  margin-bottom: .375rem;
+}
+
+.profile-config-block {
+  background: var(--pint-code-bg);
+  color: var(--pint-text);
+  font-size: .8rem;
+  border-radius: .375rem;
+  padding: .875rem 1rem;
+  overflow-x: auto;
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes profileFadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .profile-section { animation: profileFadeUp .2s ease both; }
+  .profile-section:nth-of-type(1) { animation-delay: .04s; }
+  .profile-section:nth-of-type(2) { animation-delay: .08s; }
+  .profile-section:nth-of-type(3) { animation-delay: .12s; }
+  .profile-section:nth-of-type(4) { animation-delay: .16s; }
+}
+</style>
+
+<h1 class="page-title">Your WiFi Profile</h1>
+<p class="text-muted mb-4" style="font-size:.9rem; margin-top: -.75rem;">Certificates are generated fresh on each download and are valid for 5 years.</p>
+
+<div class="profile-section profile-ios">
+  <div class="profile-section-head">
+    <span class="mdi mdi-apple"></span> iOS &amp; macOS
+  </div>
+  <div class="profile-section-body">
+    <p class="profile-desc">Opens directly in Settings. Tap install to connect automatically.</p>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <button class="btn btn-primary" onclick="downloadProfile('ios')" id="btn-ios">
+        <span class="mdi mdi-download me-1"></span> Download .mobileconfig
+      </button>
+      <span id="spinner-ios" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
     </div>
-    <div class="card-body">
-        <p class="mb-3">Opens directly in Settings. Tap install to connect automatically.</p>
-        <div class="d-flex align-items-center gap-3">
-            <button class="btn btn-primary" onclick="downloadProfile('ios')" id="btn-ios">
-                <span class="mdi mdi-download"></span> Download .mobileconfig
-            </button>
-            <span id="spinner-ios" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
-        </div>
-        <div id="error-ios" class="text-danger small mt-2" style="display:none;"></div>
-    </div>
+    <div id="error-ios" class="text-danger small mt-2" style="display:none;"></div>
+  </div>
 </div>
 
-<div class="card mt-3">
-    <div class="card-header platform-header-alt" style="border-bottom-color: var(--bs-success);">
-        <strong class="text-success"><span class="mdi mdi-android"></span> Android</strong>
+<div class="profile-section profile-android">
+  <div class="profile-section-head">
+    <span class="mdi mdi-android"></span> Android
+  </div>
+  <div class="profile-section-body">
+    <ol class="profile-desc">
+      <li>Download and install the CA certificate below.</li>
+      <li>Download and install the .p12 client certificate.</li>
+      <li>Go to WiFi settings &rarr; Add network &rarr; select <strong>{{.SSID}}</strong> &rarr; EAP-TLS &rarr; choose your certificate.</li>
+    </ol>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="/profile/ca" class="btn btn-outline-success">
+        <span class="mdi mdi-certificate-outline me-1"></span> Download CA Cert (.pem)
+      </a>
+      <button class="btn btn-success" onclick="downloadProfile('android')" id="btn-android">
+        <span class="mdi mdi-download me-1"></span> Download Client Cert (.p12)
+      </button>
+      <span id="spinner-android" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
     </div>
-    <div class="card-body">
-        <ol class="mb-3">
-            <li>Download and install the CA certificate below.</li>
-            <li>Download and install the .p12 client certificate.</li>
-            <li>Go to WiFi settings → Add network → select <strong>{{.SSID}}</strong> → EAP-TLS → choose your certificate.</li>
-        </ol>
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <a href="/profile/ca" class="btn btn-outline-success">
-                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.pem)
-            </a>
-            <button class="btn btn-success" onclick="downloadProfile('android')" id="btn-android">
-                <span class="mdi mdi-download"></span> Download Client Cert (.p12)
-            </button>
-            <span id="spinner-android" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
-        </div>
-        <div id="error-android" class="text-danger small mt-2" style="display:none;"></div>
-    </div>
+    <div id="error-android" class="text-danger small mt-2" style="display:none;"></div>
+  </div>
 </div>
 
-<div class="card mt-3">
-    <div class="card-header platform-header-alt" style="border-bottom-color: #6c757d;">
-        <strong style="color: #6c757d;"><span class="mdi mdi-microsoft-windows"></span> Windows</strong>
+<div class="profile-section profile-windows">
+  <div class="profile-section-head">
+    <span class="mdi mdi-microsoft-windows"></span> Windows
+  </div>
+  <div class="profile-section-body">
+    <ol class="profile-desc">
+      <li>Download and install the CA certificate below (import into <em>Trusted Root Certification Authorities</em>).</li>
+      <li>Download and install the client certificate (.p12) below (import into <em>Personal</em> certificate store).</li>
+      <li>Download the WLAN profile XML and import it by running: <code>netsh wlan add profile filename="csh-wifi.xml"</code></li>
+    </ol>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="/profile/ca" class="btn btn-outline-secondary">
+        <span class="mdi mdi-certificate-outline me-1"></span> Download CA Cert (.pem)
+      </a>
+      <button class="btn btn-secondary" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
+        <span class="mdi mdi-card-account-details-outline me-1"></span> Download Client Cert (.p12)
+      </button>
+      <span id="spinner-windows-p12" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
+      <button class="btn btn-secondary" onclick="downloadProfile('windows')" id="btn-windows">
+        <span class="mdi mdi-download me-1"></span> Download WLAN Profile (.xml)
+      </button>
+      <span id="spinner-windows" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
     </div>
-    <div class="card-body">
-        <ol class="mb-3">
-            <li>Download and install the CA certificate below (import into <em>Trusted Root Certification Authorities</em>).</li>
-            <li>Download and install the client certificate (.p12) below (import into <em>Personal</em> certificate store).</li>
-            <li>Download the WLAN profile XML and import it by running:<br>
-                <code>netsh wlan add profile filename="csh-wifi.xml"</code>
-            </li>
-        </ol>
-        <div class="d-flex align-items-center gap-3 flex-wrap">
-            <a href="/profile/ca" class="btn btn-outline-secondary">
-                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.pem)
-            </a>
-            <button class="btn btn-secondary" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
-                <span class="mdi mdi-card-account-details-outline"></span> Download Client Cert (.p12)
-            </button>
-            <span id="spinner-windows-p12" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
-            <button class="btn btn-secondary" onclick="downloadProfile('windows')" id="btn-windows">
-                <span class="mdi mdi-download"></span> Download WLAN Profile (.xml)
-            </button>
-            <span id="spinner-windows" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
-        </div>
-        <div id="error-windows-p12" class="text-danger small mt-2" style="display:none;"></div>
-        <div id="error-windows" class="text-danger small mt-2" style="display:none;"></div>
-    </div>
+    <div id="error-windows-p12" class="text-danger small mt-2" style="display:none;"></div>
+    <div id="error-windows" class="text-danger small mt-2" style="display:none;"></div>
+  </div>
 </div>
-<div class="card mt-3">
-    <div class="card-header platform-header-alt" style="border-bottom-color: #0dcaf0;">
-        <strong style="color: #0dcaf0;"><span class="mdi mdi-linux"></span> Linux</strong>
-    </div>
-    <div class="card-body">
-        <div class="d-flex align-items-center gap-3 flex-wrap mb-3">
-            <a href="/profile/ca" class="btn btn-outline-info">
-                <span class="mdi mdi-certificate-outline"></span> Download CA Cert (.pem)
-            </a>
-            <button class="btn btn-info" onclick="downloadProfile('android', 'linux')" id="btn-linux">
-                <span class="mdi mdi-download"></span> Download Client Cert (.p12)
-            </button>
-            <span id="spinner-linux" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating…</span>
-        </div>
-        <div id="error-linux" class="text-danger small mt-2" style="display:none;"></div>
 
-        <p class="small fw-semibold mb-1">Add a network block to <code>/etc/wpa_supplicant/wpa_supplicant.conf</code>:</p>
-        <pre class="rounded p-2 mb-0" style="background:var(--pint-code-bg);color:var(--pint-text);font-size:.8rem">network={
+<div class="profile-section profile-linux">
+  <div class="profile-section-head">
+    <span class="mdi mdi-linux"></span> Linux
+  </div>
+  <div class="profile-section-body">
+    <p class="profile-config-label">Add a network block to <code>/etc/wpa_supplicant/wpa_supplicant.conf</code>:</p>
+    <pre class="profile-config-block mb-3">network={
     ssid="{{.SSID}}"
     key_mgmt=WPA-EAP
     eap=TLS
@@ -98,7 +170,17 @@
     ca_cert="/etc/wpa_supplicant/ca.pem"
     private_key="/etc/wpa_supplicant/client.p12"
 }</pre>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <a href="/profile/ca" class="btn btn-outline-info">
+        <span class="mdi mdi-certificate-outline me-1"></span> Download CA Cert (.pem)
+      </a>
+      <button class="btn btn-info" onclick="downloadProfile('android', 'linux')" id="btn-linux">
+        <span class="mdi mdi-download me-1"></span> Download Client Cert (.p12)
+      </button>
+      <span id="spinner-linux" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
     </div>
+    <div id="error-linux" class="text-danger small mt-2" style="display:none;"></div>
+  </div>
 </div>
 {{end}}
 {{define "scripts"}}

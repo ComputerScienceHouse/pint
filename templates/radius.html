@@ -1,140 +1,351 @@
 <!-- templates/radius.html -->
 {{template "layout.html" .}}
-{{define "title"}}Home RadSec | PINT{{end}}
+{{define "title"}}Home RadSec{{end}}
 {{define "content"}}
+<style>
+.radius-section {
+  border: 1px solid var(--pint-border);
+  border-radius: .5rem;
+  background: var(--pint-surface);
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+}
+
+.radius-section-head {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .65rem 1.25rem;
+  border-bottom: 1px solid var(--pint-border);
+  background: var(--pint-alt-header-bg);
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--pint-muted-strong);
+}
+
+.radius-section-body {
+  padding: 1.25rem;
+}
+
+/* Info grid: single-column label/value pairs (used in cert metadata + setup) */
+.info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: 2rem;
+  row-gap: .4rem;
+  font-size: .875rem;
+  align-items: center;
+}
+
+/* 2-column pair grid for server info */
+.info-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .5rem 3rem;
+  font-size: .875rem;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: .625rem;
+  min-width: 0;
+}
+
+.info-2col-full { grid-column: 1 / -1; }
+
+@media (max-width: 600px) {
+  .info-2col { grid-template-columns: 1fr; }
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  padding: .2em .35em;
+  color: var(--pint-muted);
+  cursor: pointer;
+  opacity: .6;
+  font-size: .8rem;
+  line-height: 1;
+  border-radius: .25rem;
+  transition: opacity .15s, color .15s, background .15s;
+}
+
+.copy-btn:hover {
+  opacity: 1;
+  color: var(--pint-text);
+  background: var(--pint-surface-raised);
+}
+
+.copy-btn.copied { opacity: 1; color: #198754; }
+
+/* CSH theme remaps --bs-secondary to brand color; restore neutral for EKU badges */
+.badge-neutral {
+  background-color: var(--pint-surface-raised) !important;
+  color: var(--pint-muted-strong) !important;
+  border: 1px solid var(--pint-border);
+  font-weight: 500;
+}
+
+.info-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--pint-muted);
+  align-self: center;
+  white-space: nowrap;
+}
+
+.info-value {
+  color: var(--pint-text);
+  align-self: center;
+  font-weight: 600;
+}
+
+/* Strip code box inside grids so padding doesn't offset alignment */
+.info-grid code,
+.info-2col code {
+  background: transparent;
+  padding: 0;
+  font-size: .875em;
+  color: var(--pint-code-color);
+}
+
+/* Credential subsection headers */
+.cred-sub-head {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--pint-muted);
+  margin-bottom: .875rem;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.cred-divider {
+  border: none;
+  border-top: 1px solid var(--pint-border);
+  margin: 1.25rem 0;
+}
+
+/* PEM textarea */
+.pem-area {
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Fira Code', monospace !important;
+  font-size: .78rem !important;
+  line-height: 1.5;
+}
+
+/* Danger zone */
+.radius-section-danger {
+  border-color: rgba(var(--bs-danger-rgb), .3);
+}
+
+.radius-danger-title {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--pint-text);
+  margin-bottom: .2rem;
+}
+
+.radius-danger-desc {
+  font-size: .8rem;
+  color: var(--pint-muted);
+  line-height: 1.45;
+}
+
+/* Setup state */
+.radius-setup {
+  max-width: 36rem;
+  margin-top: .5rem;
+}
+
+/* Animations */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes radiusFadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .radius-section:nth-child(1) { animation: radiusFadeUp .2s ease both .04s; }
+  .radius-section:nth-child(2) { animation: radiusFadeUp .2s ease both .08s; }
+  .radius-section:nth-child(3) { animation: radiusFadeUp .2s ease both .12s; }
+  .radius-setup                { animation: radiusFadeUp .2s ease both .04s; }
+}
+</style>
 
 {{if .Client}}
-<div class="row mt-4">
+<div class="mt-2">
+  <h1 class="page-title">Home RadSec</h1>
 
-  <!-- Main column -->
-  <div class="col-lg-8">
-
-    <!-- Server Information -->
-    <div class="card mb-4">
-      <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-server-network"></span> Server Information</strong></div>
-      <div class="card-body">
-        <dl class="row mb-0">
-          <dt class="col-sm-4"><span class="mdi mdi-server"></span> RADIUS Server</dt>
-          <dd class="col-sm-8"><code>{{.RadiusServer}}</code></dd>
-          <dt class="col-sm-4"><span class="mdi mdi-ethernet"></span> Auth Port</dt>
-          <dd class="col-sm-8"><code>{{.RadiusPort}}</code></dd>
-          <dt class="col-sm-4"><span class="mdi mdi-shield-lock"></span> Protocol</dt>
-          <dd class="col-sm-8">RadSec (RADIUS over TLS)</dd>
-          <dt class="col-sm-4"><span class="mdi mdi-key-variant"></span> Shared Secret</dt>
-          <dd class="col-sm-8"><code>radsec</code></dd>
-          <dt class="col-sm-4"><span class="mdi mdi-ip-network"></span> Source IP / CIDR</dt>
-          {{if .IPCIDR}}
-          <dd class="col-sm-8 mb-0"><code>{{.IPCIDR}}</code></dd>
-          {{else}}
-          <dd class="col-sm-8 mb-0"><span class="text-warning"><span class="mdi mdi-alert"></span> Not set: any IP accepted</span></dd>
-          {{end}}
-        </dl>
-      </div>
+  <!-- Server Information -->
+  <div class="radius-section">
+    <div class="radius-section-head">
+      <span class="mdi mdi-server-network"></span> Server Information
     </div>
-
-    <!-- Credentials -->
-    <div class="card mb-4">
-      <div class="card-header bg-primary text-white"><strong><span class="mdi mdi-key-chain"></span> Credentials</strong></div>
-      <div class="card-body">
-
-        <!-- Private Key -->
-        <h6><span class="mdi mdi-lock"></span> Private Key</h6>
-        {{if .KeyPEM}}
-        <div class="input-group align-items-start mb-4">
-          <textarea id="field-key" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.KeyPEM}}</textarea>
-          <button class="btn btn-secondary" type="button" onclick="copyTA('field-key', this)" title="Copy">
-            <span class="mdi mdi-content-copy"></span>
-          </button>
-          <button class="btn btn-secondary" type="button" onclick="downloadTA('field-key', 'client.key')" title="Download">
-            <span class="mdi mdi-download"></span>
-          </button>
+    <div class="radius-section-body">
+      <div class="info-2col mb-4">
+        <div class="info-item">
+          <span class="info-label">RADIUS Server</span>
+          <span class="info-value" id="sv-radius-server"><code>{{.RadiusServer}}</code></span>
+          <button class="copy-btn" onclick="copyText('sv-radius-server', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>
         </div>
-        {{else}}
-        <div class="alert alert-warning mb-4">
-          <strong>Private key not available.</strong> For security, private keys are only shown immediately after generation. If you no longer have your key, use <strong>Renew or Reissue Key Pair</strong> in the Actions panel.
+        <div class="info-item">
+          <span class="info-label">Auth Port</span>
+          <span class="info-value" id="sv-auth-port"><code>{{.RadiusPort}}</code></span>
+          <button class="copy-btn" onclick="copyText('sv-auth-port', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>
         </div>
-        {{end}}
-
-        <hr>
-
-        <!-- Certificate -->
-        <h6><span class="mdi mdi-certificate"></span> Certificate</h6>
-        {{if .Client.CertSerial}}
-        <dl class="row mb-3">
-          <dt class="col-sm-4 fw-normal text-muted">Subject</dt>
-          <dd class="col-sm-8"><code>{{.Client.CertSubject}}</code></dd>
-          <dt class="col-sm-4 fw-normal text-muted">Issuer</dt>
-          <dd class="col-sm-8"><code>{{.Client.CertIssuer}}</code></dd>
-          <dt class="col-sm-4 fw-normal text-muted">Serial</dt>
-          <dd class="col-sm-8"><code>{{.Client.CertSerial}}</code></dd>
-          <dt class="col-sm-4 fw-normal text-muted">Valid From</dt>
-          <dd class="col-sm-8">{{.Client.CertNotBefore}}</dd>
-          <dt class="col-sm-4 fw-normal text-muted">Expires</dt>
-          <dd class="col-sm-8">{{.Client.CertNotAfter}}</dd>
-          {{if .Client.CertKeyBits}}
-          <dt class="col-sm-4 fw-normal text-muted">Key</dt>
-          <dd class="col-sm-8">EC {{.Client.CertKeyBits}}-bit</dd>
-          {{end}}
-          {{if .Client.CertEKUs}}
-          <dt class="col-sm-4 fw-normal text-muted">Extended Key Usage</dt>
-          <dd class="col-sm-8 mb-0">{{range .Client.CertEKUs}}<span class="badge bg-secondary me-1">{{.}}</span>{{end}}</dd>
-          {{end}}
-        </dl>
-        {{end}}
-        {{if .CertPEM}}
-        <div class="input-group align-items-start mb-4">
-          <textarea id="field-cert" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.CertPEM}}</textarea>
-          <button class="btn btn-secondary" type="button" onclick="copyTA('field-cert', this)" title="Copy">
-            <span class="mdi mdi-content-copy"></span>
-          </button>
-          <button class="btn btn-secondary" type="button" onclick="downloadTA('field-cert', 'client.crt')" title="Download">
-            <span class="mdi mdi-download"></span>
-          </button>
+        <div class="info-item">
+          <span class="info-label">Protocol</span>
+          <span class="info-value">RadSec (RADIUS over TLS)</span>
         </div>
-        {{end}}
-
-        <hr>
-
-        <!-- CA Chain -->
-        <h6><span class="mdi mdi-certificate-outline"></span> CA Chain</h6>
-        <div class="input-group align-items-start">
-          <textarea id="field-ca" class="form-control" style="font-family: monospace; font-size: 0.8rem;" rows="8" readonly>{{.CACertPEM}}</textarea>
-          <button class="btn btn-secondary" type="button" onclick="copyTA('field-ca', this)" title="Copy">
-            <span class="mdi mdi-content-copy"></span>
-          </button>
-          <a href="/radius/ca" download class="btn btn-secondary" title="Download">
-            <span class="mdi mdi-download"></span>
-          </a>
+        <div class="info-item">
+          <span class="info-label">Shared Secret</span>
+          <span class="info-value" id="sv-shared-secret"><code>radsec</code></span>
+          <button class="copy-btn" onclick="copyText('sv-shared-secret', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>
         </div>
-
+        <div class="info-item info-2col-full">
+          <span class="info-label">Source IP / CIDR</span>
+          <span class="info-value" id="sv-source-ip">
+            {{if .IPCIDR}}<code>{{.IPCIDR}}</code>{{else}}<span class="text-warning"><span class="mdi mdi-alert"></span> Not set: any IP accepted</span>{{end}}
+          </span>
+          {{if .IPCIDR}}<button class="copy-btn" onclick="copyText('sv-source-ip', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>{{end}}
+        </div>
       </div>
-    </div>
-
-  </div><!-- /col-lg-8 -->
-
-  <!-- Sidebar -->
-  <div class="col-lg-4">
-    <div class="card sticky-top" style="top: 1rem;">
-      <div class="card-header bg-primary text-white"><strong>Actions</strong></div>
-      <div class="card-body d-grid gap-2">
-        <button type="button" class="btn btn-success"
-                data-bs-toggle="modal" data-bs-target="#updateIPModal">
-          <span class="mdi mdi-ip-network"></span> Update Source IP
-        </button>
-        <button type="button" class="btn btn-warning"
-                data-bs-toggle="modal" data-bs-target="#renewModal">
-          <span class="mdi mdi-autorenew"></span> Renew or Reissue Key Pair
-        </button>
-        <hr class="my-1">
-        <button type="button" class="btn btn-outline-danger"
-                data-bs-toggle="modal" data-bs-target="#unenrollModal">
-          <span class="mdi mdi-delete-outline"></span> Unenroll RADIUS Client
-        </button>
-      </div>
+      <button type="button" class="btn btn-outline-success btn-sm"
+              data-bs-toggle="modal" data-bs-target="#updateIPModal">
+        <span class="mdi mdi-ip-network me-1"></span> Update Source IP
+      </button>
     </div>
   </div>
 
-</div><!-- /row -->
+  <!-- Credentials -->
+  <div class="radius-section">
+    <div class="radius-section-head">
+      <span class="mdi mdi-key-chain"></span> Credentials
+    </div>
+    <div class="radius-section-body">
+
+      <!-- Private Key -->
+      <div class="cred-sub-head"><span class="mdi mdi-lock"></span> Private Key</div>
+      {{if .KeyPEM}}
+      <div class="input-group align-items-start mb-4">
+        <textarea id="field-key" class="form-control pem-area" rows="8" readonly>{{.KeyPEM}}</textarea>
+        <button class="btn btn-secondary" type="button" onclick="copyTA('field-key', this)" title="Copy">
+          <span class="mdi mdi-content-copy"></span>
+        </button>
+        <button class="btn btn-secondary" type="button" onclick="downloadTA('field-key', 'client.key')" title="Download">
+          <span class="mdi mdi-download"></span>
+        </button>
+      </div>
+      {{else}}
+      <div class="alert alert-warning mb-4">
+        <strong>Private key not available.</strong> For security, private keys are only shown immediately after generation. If you no longer have your key, use <strong>Renew or Reissue Key Pair</strong> below.
+      </div>
+      {{end}}
+
+      <div class="cred-divider"></div>
+
+      <!-- Certificate -->
+      <div class="cred-sub-head"><span class="mdi mdi-certificate"></span> Certificate</div>
+      {{if .Client.CertSerial}}
+      <div class="info-2col mb-3">
+        <div class="info-item">
+          <span class="info-label">Subject</span>
+          <span class="info-value" id="cert-subject"><code>{{.Client.CertSubject}}</code></span>
+          <button class="copy-btn" onclick="copyText('cert-subject', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Issuer</span>
+          <span class="info-value" id="cert-issuer"><code>{{.Client.CertIssuer}}</code></span>
+          <button class="copy-btn" onclick="copyText('cert-issuer', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Serial</span>
+          <span class="info-value" id="cert-serial"><code>{{.Client.CertSerial}}</code></span>
+          <button class="copy-btn" onclick="copyText('cert-serial', this)" title="Copy"><span class="mdi mdi-content-copy"></span></button>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Valid From</span>
+          <span class="info-value">{{.Client.CertNotBefore}}</span>
+        </div>
+        {{if .Client.CertKeyBits}}
+        <div class="info-item">
+          <span class="info-label">Expires</span>
+          <span class="info-value">{{.Client.CertNotAfter}}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">Key</span>
+          <span class="info-value">EC {{.Client.CertKeyBits}}-bit</span>
+        </div>
+        {{else}}
+        <div class="info-item info-2col-full">
+          <span class="info-label">Expires</span>
+          <span class="info-value">{{.Client.CertNotAfter}}</span>
+        </div>
+        {{end}}
+        {{if .Client.CertEKUs}}
+        <div class="info-item info-2col-full">
+          <span class="info-label">Extended Key Usage</span>
+          <span class="info-value" style="font-weight: normal;">{{range .Client.CertEKUs}}<span class="badge badge-neutral me-1">{{.}}</span>{{end}}</span>
+        </div>
+        {{end}}
+      </div>
+      {{end}}
+      {{if .CertPEM}}
+      <div class="input-group align-items-start mb-4">
+        <textarea id="field-cert" class="form-control pem-area" rows="8" readonly>{{.CertPEM}}</textarea>
+        <button class="btn btn-secondary" type="button" onclick="copyTA('field-cert', this)" title="Copy">
+          <span class="mdi mdi-content-copy"></span>
+        </button>
+        <button class="btn btn-secondary" type="button" onclick="downloadTA('field-cert', 'client.crt')" title="Download">
+          <span class="mdi mdi-download"></span>
+        </button>
+      </div>
+      {{end}}
+
+      <div class="cred-divider"></div>
+
+      <!-- CA Chain -->
+      <div class="cred-sub-head"><span class="mdi mdi-certificate-outline"></span> CA Chain</div>
+      <div class="input-group align-items-start mb-4">
+        <textarea id="field-ca" class="form-control pem-area" rows="8" readonly>{{.CACertPEM}}</textarea>
+        <button class="btn btn-secondary" type="button" onclick="copyTA('field-ca', this)" title="Copy">
+          <span class="mdi mdi-content-copy"></span>
+        </button>
+        <a href="/radius/ca" download class="btn btn-secondary" title="Download">
+          <span class="mdi mdi-download"></span>
+        </a>
+      </div>
+
+      <div class="cred-divider"></div>
+
+      <button type="button" class="btn btn-warning btn-sm"
+              data-bs-toggle="modal" data-bs-target="#renewModal">
+        <span class="mdi mdi-autorenew me-1"></span> Renew or Reissue Key Pair
+      </button>
+
+    </div>
+  </div>
+
+  <!-- Danger zone -->
+  <div class="radius-section radius-section-danger">
+    <div class="radius-section-body d-flex align-items-center justify-content-between gap-3 flex-wrap">
+      <div>
+        <div class="radius-danger-title">Unenroll RADIUS Client</div>
+        <div class="radius-danger-desc">Revokes your certificate and removes your RADIUS configuration. Your home router will immediately lose access.</div>
+      </div>
+      <button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0"
+              data-bs-toggle="modal" data-bs-target="#unenrollModal">
+        <span class="mdi mdi-delete-outline me-1"></span> Unenroll
+      </button>
+    </div>
+  </div>
+
+</div>
 
 <!-- Update IP Modal -->
 <div class="modal fade" id="updateIPModal" tabindex="-1" aria-labelledby="updateIPModalLabel" aria-hidden="true">
@@ -147,7 +358,7 @@
       <form method="POST" action="/radius/update-ip">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
-          <p class="text-muted">Set the IP address your router connects from.</p>
+          <p class="text-muted mb-3">Set the IP address your router connects from.</p>
           <div class="mb-0">
             <label for="modal-ip-cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
             <input type="text" class="form-control" id="modal-ip-cidr" name="ip_cidr"
@@ -212,35 +423,46 @@
 
 {{else}}
 <!-- Setup state: no existing configuration -->
-<div class="row mt-4">
-  <div class="col-md-8 col-lg-6">
-    <h4><span class="mdi mdi-router-wireless-settings"></span> Set Up Home RadSec</h4>
-    <dl class="row mb-3">
-      <dt class="col-sm-4">RADIUS Server</dt>
-      <dd class="col-sm-8"><code>{{.RadiusServer}}</code></dd>
-      <dt class="col-sm-4">Auth Port</dt>
-      <dd class="col-sm-8"><code>{{.RadiusPort}}</code></dd>
-      <dt class="col-sm-4">Protocol</dt>
-      <dd class="col-sm-8">RadSec (RADIUS over TLS)</dd>
-    </dl>
-    <p>Broadcast the CSH WiFi SSID from your home router. PINT will generate a private key and client certificate so your router can authenticate users against the CSH RADIUS server over RadSec.</p>
-    <form method="POST" action="/radius/secret">
-      <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-      <div class="mb-3">
-        <label for="ip_cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
-        <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
-               placeholder="e.g. 203.0.113.42" required>
-        <div class="form-text">Your router's external IP address. Only connections from this IP will be accepted.</div>
-      </div>
-      <button type="submit" class="btn btn-primary"><span class="mdi mdi-key-plus"></span> Generate Credentials</button>
-    </form>
+<div class="radius-setup">
+  <h1 class="page-title">Home RadSec</h1>
+  <div class="info-grid mb-4">
+    <span class="info-label">RADIUS Server</span>
+    <span class="info-value"><code>{{.RadiusServer}}</code></span>
+    <span class="info-label">Auth Port</span>
+    <span class="info-value"><code>{{.RadiusPort}}</code></span>
+    <span class="info-label">Protocol</span>
+    <span class="info-value">RadSec (RADIUS over TLS)</span>
   </div>
+  <p class="mb-3" style="font-size:.9rem; color: var(--pint-muted);">Broadcast the CSH WiFi SSID from your home router. PINT will generate a private key and client certificate so your router can authenticate users against the CSH RADIUS server over RadSec.</p>
+  <form method="POST" action="/radius/secret">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div class="mb-3">
+      <label for="ip_cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
+      <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
+             placeholder="e.g. 203.0.113.42" required>
+      <div class="form-text">Your router's external IP address. Only connections from this IP will be accepted.</div>
+    </div>
+    <button type="submit" class="btn btn-primary"><span class="mdi mdi-key-plus me-1"></span> Generate Credentials</button>
+  </form>
 </div>
 {{end}}
 
 {{end}}
 {{define "scripts"}}
 <script>
+function copyText(id, btn) {
+  var text = document.getElementById(id).textContent.trim();
+  navigator.clipboard.writeText(text).then(function() {
+    var icon = btn.querySelector('.mdi');
+    btn.classList.add('copied');
+    if (icon) icon.classList.replace('mdi-content-copy', 'mdi-check');
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      if (icon) icon.classList.replace('mdi-check', 'mdi-content-copy');
+    }, 1500);
+  });
+}
+
 function flashCopied(btn) {
   var icon = btn.querySelector('.mdi');
   btn.classList.replace('btn-secondary', 'btn-success');

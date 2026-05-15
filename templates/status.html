@@ -1,11 +1,9 @@
 <!-- templates/status.html -->
 {{template "layout.html" .}}
-{{define "title"}}RADIUS Status | PINT{{end}}
+{{define "title"}}RADIUS Status{{end}}
 {{define "content"}}
 
 <style>
-/* ── Status page ───────────────────────────────────────────────────────── */
-
 .status-page-head {
   display: flex;
   align-items: center;
@@ -338,7 +336,7 @@
 </style>
 
 <div class="status-page-head">
-    <h4 class="mb-0"><span class="mdi mdi-pulse"></span> FreeRADIUS Status</h4>
+    <h1 class="page-title mb-0">FreeRADIUS Status</h1>
     {{if .IsRTP}}
     <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#reloadModal">
         <span class="mdi mdi-restart"></span> Rollout Restart

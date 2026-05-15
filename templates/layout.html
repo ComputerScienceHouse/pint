@@ -4,13 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>PINT | {{block "title" .}}CSH WiFi{{end}}</title>
+    <title>PINT &middot; {{block "title" .}}CSH WiFi{{end}}</title>
     <link rel="stylesheet" href="https://assets.csh.rit.edu/csh-material-bootstrap/5.3.8/dist/css/bootstrap.min.css" media="screen">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@mdi/font@7.4.47/css/materialdesignicons.min.css">
     <style>
-      /* ── Design tokens ──────────────────────────────────────────
-         Light values reference Bootstrap CSS vars.
-         Dark values are overridden in the media query below.     */
       :root {
         --pint-code-color:        #6c757d;
         --pint-code-bg:           #f8f9fa;
@@ -30,7 +27,7 @@
 
       @media (prefers-color-scheme: dark) {
         :root {
-          /* Concrete dark values — don't rely on CSH bootstrap's --bs-* vars */
+          /* don't rely on CSH bootstrap's --bs-* vars in dark mode */
           --pint-body-bg:           #1e1e1e;
           --pint-code-color:        #adb5bd;
           --pint-code-bg:           #2a2a2a;
@@ -49,8 +46,7 @@
         }
       }
 
-      /* ── Code elements ──────────────────────────────────────────
-         Override Bootstrap 5's default pink with neutral style.  */
+      /* Bootstrap 5 default <code> is pink; override with neutral */
       code {
         color: var(--pint-code-color);
         background-color: var(--pint-code-bg);
@@ -59,7 +55,7 @@
         font-size: .875em;
       }
 
-      /* ── Restore gray secondary buttons (CSH theme maps --bs-secondary to brand red) */
+      /* CSH theme remaps --bs-secondary to brand red; restore neutral gray */
       .btn-secondary {
         --bs-btn-color:              #fff;
         --bs-btn-bg:                 #6c757d;
@@ -87,14 +83,21 @@
         --bs-btn-disabled-border-color:#6c757d;
       }
 
-      /* ── Custom components ──────────────────────────────────── */
       .platform-header-alt {
         background-color: var(--pint-alt-header-bg);
         border-bottom: 2px solid var(--pint-alt-header-border);
         color: var(--pint-alt-header-color);
       }
 
-      /* ── Navbar subtitle ────────────────────────────────────── */
+      .page-title {
+        font-size: clamp(1.75rem, 5vw, 2.5rem);
+        font-weight: 800;
+        letter-spacing: -.04em;
+        line-height: 1.1;
+        color: var(--pint-text);
+        margin: 0 0 1.75rem;
+      }
+
       .navbar-subtitle {
         font-size: .65em;
         opacity: .85;
@@ -103,7 +106,6 @@
         letter-spacing: .01em;
       }
 
-      /* ── Dark mode surface overrides ────────────────────────── */
       @media (prefers-color-scheme: dark) {
         body { background-color: var(--pint-body-bg); color: var(--pint-text); --bs-body-color: var(--pint-text); --bs-body-bg: var(--pint-body-bg); }
 
@@ -166,6 +168,13 @@
 <body>
 <nav class="navbar navbar-expand-sm navbar-dark bg-primary">
     <div class="container">
+        <a href="https://csh.rit.edu" class="navbar-brand me-3 pe-3" style="border-right: 1px solid rgba(255,255,255,.25);" target="_blank" rel="noopener noreferrer" title="Computer Science House">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.014 0.028 540 525" height="28" fill="currentColor" aria-label="CSH" style="display:block;">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M420,135V30c0-16.569-13.433-30-30-30H30C13.431,0,0,13.431,0,30V495c0,16.567,13.431,30,30,30h360c16.567,0,30-13.433,30-30V390h-90V420c0,8.284-6.715,15-15,15H105c-8.284,0-15-6.716-15-15V105c0-8.284,6.716-15,15-15h210c8.285,0,15,6.716,15,15v30H420z"/>
+                <path d="M292.5,119.999H127.501c-4.143,0-7.5,3.357-7.5,7.5V285c0,4.143,3.357,7.499,7.5,7.499h101.25c2.071,0,3.75,1.68,3.75,3.751v44.999c0,2.071-1.679,3.75-3.75,3.75H191.25c-2.071,0-3.75-1.679-3.75-3.75V322.5h-67.499V397.5c0,4.142,3.357,7.5,7.5,7.5H292.5c4.143,0,7.5-3.358,7.5-7.5V240c0-4.143-3.357-7.5-7.5-7.5H191.25c-2.071,0-3.75-1.679-3.75-3.75l-0.001-45c0-2.071,1.679-3.75,3.75-3.75h37.501c2.071,0,3.75,1.679,3.75,3.75l0.001,18.75H300v-75.001C300,123.356,296.643,119.999,292.5,119.999z"/>
+                <polygon points="420,300 420,360 330,360 330,165 420,165 420,225 450,225 450,0 540,0 540,525 450,525 450,300 "/>
+            </svg>
+        </a>
         <a class="navbar-brand" href="/">
             <span class="mdi mdi-beer"></span> PINT
             <div class="navbar-subtitle">Pouring IPA for Network Trust</div>
@@ -176,7 +185,7 @@
             <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarUser">
-            <ul class="navbar-nav me-auto">
+            <ul class="navbar-nav ms-auto">
                 <li class="nav-item">
                     <a class="nav-link{{if eq .CurrentPath "/dashboard"}} active" aria-current="page{{end}}" href="/dashboard"><span class="mdi mdi-view-dashboard-outline"></span> Dashboard</a>
                 </li>
@@ -189,7 +198,7 @@
                 </li>
                 {{end}}
             </ul>
-            <ul class="navbar-nav ms-auto">
+            <ul class="navbar-nav ms-3">
                 <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle d-flex align-items-center" href="#"
                        id="navUserDropdown" role="button"
@@ -213,12 +222,11 @@
     {{block "content" .}}{{end}}
 </div>
 <footer class="py-3 mt-auto text-center" style="font-size:.8rem; color: var(--pint-muted);">
-    Computer Science House &mdash; PINT
-    {{if .GitCommit}}
-    (<a href="https://github.com/ComputerScienceHouse/pint/commit/{{.GitCommit}}"
+    Computer Science House &middot; PINT
+    {{if .GitCommit}}(<a href="https://github.com/ComputerScienceHouse/pint/commit/{{.GitCommit}}"
         class="text-muted font-monospace"
-        target="_blank" rel="noopener noreferrer">{{.GitCommit}}</a>)
-    {{end}}
+        target="_blank" rel="noopener noreferrer">{{.GitCommit}}</a>){{end}}
+    &middot; Need help? Ask in <a href="https://cshrit.slack.com/archives/opcomm" class="text-muted" target="_blank" rel="noopener noreferrer">#opcomm</a>.
 </footer>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 {{block "scripts" .}}{{end}}

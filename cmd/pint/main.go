@@ -3,11 +3,13 @@ package main
 
 import (
 	"context"
+	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -24,6 +26,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
+	"software.sslmate.com/src/go-pkcs12"
 )
 
 const radSecRenewBefore = 30 * 24 * time.Hour
@@ -112,8 +115,18 @@ func main() {
 			log.Fatalf("freeipa ca_show[%d]: %v", i, e)
 		}
 	}
-	log.Printf("fetched WiFi CA (%d bytes), RadSec CA (%d bytes), root CA (%d bytes)",
-		len(caDER), len(radSecCACertDER), len(rootCACertDER))
+	logCACert := func(name string, der []byte) {
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			log.Printf("%s: %d bytes (could not parse: %v)", name, len(der), err)
+			return
+		}
+		remaining := time.Until(cert.NotAfter).Truncate(time.Hour)
+		log.Printf("%s: valid until %s (%s remaining)", name, cert.NotAfter.Format("2006-01-02"), formatDuration(remaining))
+	}
+	logCACert("WiFi CA", caDER)
+	logCACert("RadSec CA", radSecCACertDER)
+	logCACert("Root CA", rootCACertDER)
 
 	radSecCAChainPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: radSecCACertDER})) +
 		string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootCACertDER}))
@@ -126,6 +139,25 @@ func main() {
 
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
 	go watchRadSecServerCert(k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
+
+	// Load Apple profile signing identity if configured.
+	var appleSigner *profile.Signer
+	if cfg.AppleSigningCertPath != "" {
+		p12Data, readErr := os.ReadFile(cfg.AppleSigningCertPath)
+		if readErr != nil {
+			log.Fatalf("apple signing cert: read %s: %v", cfg.AppleSigningCertPath, readErr)
+		}
+		privKey, cert, _, p12Err := pkcs12.DecodeChain(p12Data, cfg.AppleSigningCertPassword)
+		if p12Err != nil {
+			log.Fatalf("apple signing cert: decode p12: %v", p12Err)
+		}
+		signer, ok := privKey.(crypto.Signer)
+		if !ok {
+			log.Fatalf("apple signing cert: private key does not implement crypto.Signer")
+		}
+		appleSigner = &profile.Signer{Cert: cert, Key: signer}
+		log.Printf("apple profile signing enabled (subject: %s)", cert.Subject.CommonName)
+	}
 
 	r := gin.Default()
 	r.HTMLRender = buildTemplates()
@@ -167,7 +199,7 @@ func main() {
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
-		protected.POST("/profile/generate", handlers.GenerateProfileHandler(ipaClient, cfg, caDER))
+		protected.POST("/profile/generate", handlers.GenerateProfileHandler(ipaClient, cfg, caDER, appleSigner))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/secret", handlers.SaveSecretHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
@@ -195,6 +227,17 @@ func main() {
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("server: %v", err)
 	}
+}
+
+func formatDuration(d time.Duration) string {
+	if d < 0 {
+		return "EXPIRED"
+	}
+	days := int(d.Hours()) / 24
+	if days >= 365 {
+		return fmt.Sprintf("%dy %dd", days/365, days%365)
+	}
+	return fmt.Sprintf("%dd", days)
 }
 
 func buildTemplates() multitemplate.Render {

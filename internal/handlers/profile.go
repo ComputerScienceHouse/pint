@@ -25,7 +25,8 @@ func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 }
 
 // GenerateProfileHandler serves POST /profile/generate?platform=ios|android|windows.
-func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER []byte) gin.HandlerFunc {
+// signer is optional; when non-nil, iOS mobileconfig profiles are CMS-signed.
+func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER []byte, signer *profile.Signer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		platform := c.Query("platform")
 		if platform != "ios" && platform != "android" && platform != "windows" {
@@ -91,6 +92,13 @@ func GenerateProfileHandler(ipaClient *freeipa.Client, cfg *config.Config, caDER
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "mobileconfig build failed"})
 				return
+			}
+			if signer != nil {
+				mc, err = profile.SignMobileconfig(mc, signer)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "mobileconfig signing failed"})
+					return
+				}
 			}
 			c.Header("Content-Disposition", `attachment; filename="csh-wifi.mobileconfig"`)
 			c.Data(http.StatusOK, "application/x-apple-aspen-config", mc)

@@ -1,9 +1,9 @@
 <!-- templates/admin_radius.html -->
 {{template "layout.html" .}}
-{{define "title"}}RADIUS Clients | PINT Admin{{end}}
+{{define "title"}}RADIUS Clients{{end}}
 {{define "content"}}
 <div class="d-flex align-items-center mb-4">
-    <h4 class="mb-0"><span class="mdi mdi-shield-account"></span> RADIUS Clients</h4>
+    <h1 class="page-title mb-0">RADIUS Clients</h1>
     {{if .Clients}}<span class="badge bg-secondary ms-2">{{len .Clients}}</span>{{end}}
 </div>
 

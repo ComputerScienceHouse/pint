@@ -43,6 +43,10 @@ type Config struct {
 	RadSecCheckCRL     bool   // PINT_RADIUS_RADSEC_CHECK_CRL: enable CRL checking in the RadSec TLS listener (default true; set false for local dev)
 
 
+	// Apple profile signing (optional)
+	AppleSigningCertPath     string // PINT_APPLE_SIGNING_CERTIFICATE: path to PKCS#12 signing identity
+	AppleSigningCertPassword string // PINT_APPLE_SIGNING_CERTIFICATE_PASSWORD: password for the PKCS#12
+
 	// UI
 	RadiusServer string
 
@@ -102,6 +106,9 @@ func Load() (*Config, error) {
 	cfg.IPACertProfile = optional("PINT_IPA_CERT_PROFILE", "pint_wifi")
 	cfg.RadSecClientCertProfile = optional("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE", "pint_radsec_client")
 	cfg.RadSecServerCertProfile = optional("PINT_IPA_RADSEC_SERVER_CERT_PROFILE", "pint_radsec_server")
+	cfg.AppleSigningCertPath = os.Getenv("PINT_APPLE_SIGNING_CERTIFICATE")
+	cfg.AppleSigningCertPassword = os.Getenv("PINT_APPLE_SIGNING_CERTIFICATE_PASSWORD")
+
 	cfg.LoginURL = cfg.ServerURL + "/auth/login"
 	cfg.CallbackURL = cfg.ServerURL + "/auth/callback"
 	cfg.IPAPrincipal = principalFromDN(cfg.IPAServiceAccount)
