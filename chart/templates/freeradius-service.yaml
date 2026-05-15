@@ -17,13 +17,11 @@ spec:
       {{- if and (eq .Values.freeradius.service.type "NodePort") .Values.freeradius.service.nodePort }}
       nodePort: {{ .Values.freeradius.service.nodePort }}
       {{- end }}
-    {{- if .Values.freeradius.statusServer.enabled }}
+    {{- if and .Values.freeradius.statusServer.enabled .Values.freeradius.statusServer.nodePort }}
     - port: 18121
       targetPort: status
       protocol: UDP
       name: status
-      {{- if and (eq .Values.freeradius.service.type "NodePort") .Values.freeradius.statusServer.nodePort }}
       nodePort: {{ .Values.freeradius.statusServer.nodePort }}
-      {{- end }}
     {{- end }}
 {{- end }}

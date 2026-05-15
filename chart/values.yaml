@@ -74,7 +74,7 @@ freeradius:
   statusServer:
     enabled: true
     clientCIDR: "0.0.0.0/0"  # CIDR allowed to query the status server; restrict to pod CIDR in production
-    nodePort: null  # UDP NodePort for status server; only used when freeradius.service.type=NodePort
+    nodePort: null  # set to expose status port via NodePort (dev only; PINT queries pods directly in prod)
   securityContext:
     runAsNonRoot: true
     allowPrivilegeEscalation: false
