@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"crypto"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -22,12 +21,12 @@ import (
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
-	"software.sslmate.com/src/go-pkcs12"
 )
 
 const radSecRenewBefore = 30 * 24 * time.Hour
@@ -106,12 +105,13 @@ func main() {
 		}
 	}
 
-	// Fetch all three CA certs in parallel.
+	// Fetch CA certs in parallel. Code-signing CA is fetched only when configured.
 	var (
-		caDER           []byte
-		radSecCACertDER []byte
-		rootCACertDER   []byte
-		certErr         [3]error
+		caDER              []byte
+		radSecCACertDER    []byte
+		rootCACertDER      []byte
+		codeSigningCACertDER []byte
+		certErr            [3]error
 	)
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -122,6 +122,13 @@ func main() {
 	for i, e := range certErr {
 		if e != nil {
 			log.Fatal("freeipa ca_show failed", zap.Int("index", i), zap.Error(e))
+		}
+	}
+	if cfg.CodeSigningCAName != "" {
+		var codeSigningErr error
+		codeSigningCACertDER, codeSigningErr = ipaClient.CAShow(cfg.CodeSigningCAName)
+		if codeSigningErr != nil {
+			log.Fatal("freeipa ca_show (code signing CA) failed", zap.String("ca", cfg.CodeSigningCAName), zap.Error(codeSigningErr))
 		}
 	}
 
@@ -141,6 +148,9 @@ func main() {
 	logCACert("WiFi CA", caDER)
 	logCACert("RadSec CA", radSecCACertDER)
 	logCACert("Root CA", rootCACertDER)
+	if len(codeSigningCACertDER) > 0 {
+		logCACert("Code Signing CA", codeSigningCACertDER)
+	}
 
 	radSecCAChainPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: radSecCACertDER})) +
 		string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootCACertDER}))
@@ -154,23 +164,19 @@ func main() {
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
 	go watchRadSecServerCert(log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
 
-	// Load Apple profile signing identity if configured.
+	// Load or request the profile signing cert when code signing is configured.
 	var appleSigner *profile.Signer
-	if cfg.AppleSigningCertPath != "" {
-		p12Data, readErr := os.ReadFile(cfg.AppleSigningCertPath)
-		if readErr != nil {
-			log.Fatal("apple signing cert read failed", zap.String("path", cfg.AppleSigningCertPath), zap.Error(readErr))
+	if cfg.CodeSigningCAName != "" {
+		signer, renewed, err := loadOrRenewProfileSigningCert(context.Background(), log, k8sClient, ipaClient, cfg, codeSigningCACertDER)
+		if err != nil {
+			log.Fatal("profile signing cert failed", zap.Error(err))
 		}
-		privKey, cert, _, p12Err := pkcs12.DecodeChain(p12Data, cfg.AppleSigningCertPassword)
-		if p12Err != nil {
-			log.Fatal("apple signing cert decode failed", zap.Error(p12Err))
+		if renewed {
+			log.Info("issued new profile signing cert")
 		}
-		signer, ok := privKey.(crypto.Signer)
-		if !ok {
-			log.Fatal("apple signing cert: private key does not implement crypto.Signer")
-		}
-		appleSigner = &profile.Signer{Cert: cert, Key: signer}
-		log.Info("apple profile signing enabled", zap.String("subject", cert.Subject.CommonName))
+		appleSigner = signer
+		log.Info("apple profile signing enabled", zap.String("subject", signer.Cert.Subject.CommonName))
+		go watchProfileSigningCert(log, k8sClient, ipaClient, cfg, codeSigningCACertDER)
 	}
 
 	if cfg.DisableOIDC {
@@ -219,7 +225,7 @@ func main() {
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
-		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, appleSigner))
+		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, appleSigner))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/secret", handlers.SaveSecretHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
@@ -333,6 +339,109 @@ func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaC
 			} else {
 				log.Info("radsec cert watcher: renewed cert and reloaded freeradius")
 			}
+		}
+	}
+}
+
+const profileSigningRenewBefore = 30 * 24 * time.Hour
+
+// loadOrRenewProfileSigningCert loads the profile signing cert from the K8s Secret when
+// it has more than profileSigningRenewBefore of validity remaining. Otherwise it requests
+// a new cert from FreeIPA, stores it, and returns renewed=true.
+func loadOrRenewProfileSigningCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, codeSigningCACertDER []byte) (*profile.Signer, bool, error) {
+	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.ProfileSigningCertSecret, metav1.GetOptions{})
+	if err == nil {
+		certPEM := secret.Data["tls.crt"]
+		keyPEM := secret.Data["tls.key"]
+		if len(certPEM) > 0 && len(keyPEM) > 0 {
+			block, _ := pem.Decode(certPEM)
+			if block != nil {
+				cert, parseErr := x509.ParseCertificate(block.Bytes)
+				if parseErr == nil && time.Until(cert.NotAfter) > profileSigningRenewBefore {
+					signer, signerErr := profileSignerFromPEM(cert, keyPEM, codeSigningCACertDER)
+					if signerErr == nil {
+						log.Info("reusing existing profile signing cert", zap.String("expires", cert.NotAfter.Format("2006-01-02")))
+						return signer, false, nil
+					}
+				}
+			}
+		}
+	}
+
+	privKey, csrPEM, err := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
+	if err != nil {
+		return nil, false, fmt.Errorf("generate key/csr: %w", err)
+	}
+
+	certDER, err := ipaClient.CertRequest(cfg.IPAPrincipal, string(csrPEM), cfg.CodeSigningCAName, cfg.CodeSigningCertProfile)
+	if err != nil {
+		return nil, false, fmt.Errorf("cert_request (profile signing): %w", err)
+	}
+
+	cert, err := x509.ParseCertificate(certDER)
+	if err != nil {
+		return nil, false, fmt.Errorf("parse profile signing cert: %w", err)
+	}
+
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	if err != nil {
+		return nil, false, fmt.Errorf("marshal profile signing key: %w", err)
+	}
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
+
+	signingSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: cfg.ProfileSigningCertSecret, Namespace: cfg.Namespace},
+		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
+	}
+	if _, createErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Create(ctx, signingSecret, metav1.CreateOptions{}); createErr != nil {
+		if _, updateErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Update(ctx, signingSecret, metav1.UpdateOptions{}); updateErr != nil {
+			return nil, false, fmt.Errorf("store profile signing cert: %w", updateErr)
+		}
+	}
+
+	signer, err := profileSignerFromPEM(cert, keyPEM, codeSigningCACertDER)
+	if err != nil {
+		return nil, false, fmt.Errorf("build signer: %w", err)
+	}
+	return signer, true, nil
+}
+
+// profileSignerFromPEM builds a profile.Signer from an already-parsed cert and PEM-encoded EC key.
+func profileSignerFromPEM(cert *x509.Certificate, keyPEM, codeSigningCACertDER []byte) (*profile.Signer, error) {
+	block, _ := pem.Decode(keyPEM)
+	if block == nil {
+		return nil, fmt.Errorf("decode key PEM: empty block")
+	}
+	key, err := x509.ParseECPrivateKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parse EC key: %w", err)
+	}
+	s := &profile.Signer{Cert: cert, Key: key}
+	if len(codeSigningCACertDER) > 0 {
+		codeSigningCA, err := x509.ParseCertificate(codeSigningCACertDER)
+		if err != nil {
+			return nil, fmt.Errorf("parse code signing CA: %w", err)
+		}
+		s.Intermediates = []*x509.Certificate{codeSigningCA}
+	}
+	return s, nil
+}
+
+// watchProfileSigningCert runs forever, checking daily whether the profile signing cert
+// needs renewal. Renewed certs are stored in K8s; pint picks them up on next restart.
+func watchProfileSigningCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, codeSigningCACertDER []byte) {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		ctx := context.Background()
+		_, renewed, err := loadOrRenewProfileSigningCert(ctx, log, k8sClient, ipaClient, cfg, codeSigningCACertDER)
+		if err != nil {
+			log.Error("profile signing cert watcher: renewal failed", zap.Error(err))
+			continue
+		}
+		if renewed {
+			log.Info("profile signing cert watcher: renewed cert (takes effect on next restart)")
 		}
 	}
 }

@@ -11,8 +11,9 @@ import (
 
 // Signer holds the certificate and private key used to sign mobileconfig profiles.
 type Signer struct {
-	Cert *x509.Certificate
-	Key  crypto.Signer
+	Cert          *x509.Certificate
+	Key           crypto.Signer
+	Intermediates []*x509.Certificate // CA chain to include in the CMS envelope for chain verification at install time
 }
 
 // SignMobileconfig wraps the plist data in a CMS SignedData envelope.
@@ -24,6 +25,9 @@ func SignMobileconfig(data []byte, s *Signer) ([]byte, error) {
 	}
 	if err := sd.AddSigner(s.Cert, s.Key, pkcs7.SignerInfoConfig{}); err != nil {
 		return nil, fmt.Errorf("pkcs7 add signer: %w", err)
+	}
+	for _, ca := range s.Intermediates {
+		sd.AddCertificate(ca)
 	}
 	signed, err := sd.Finish()
 	if err != nil {

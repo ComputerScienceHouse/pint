@@ -27,7 +27,7 @@ func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 
 // GenerateProfileHandler serves POST /profile/generate?platform=ios|android|windows.
 // signer is optional; when non-nil, iOS mobileconfig profiles are CMS-signed.
-func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, caDER []byte, signer *profile.Signer) gin.HandlerFunc {
+func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, caDER, rootCACertDER, codeSigningCACertDER []byte, signer *profile.Signer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		platform := c.Query("platform")
 		if platform != "ios" && platform != "android" && platform != "windows" {
@@ -89,12 +89,14 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 			}
 			radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
 			mc, err := profile.BuildMobileconfig(profile.MobileconfigParams{
-				SSID:           cfg.WiFiSSID,
-				RadiusHost:     radiusHost,
-				PKCS12Bytes:    p12,
-				PKCS12Password: p12Password,
-				CACertDER:      caDER,
-				Username:       username,
+				SSID:                 cfg.WiFiSSID,
+				RadiusHost:           radiusHost,
+				PKCS12Bytes:          p12,
+				PKCS12Password:       p12Password,
+				CACertDER:            caDER,
+				RootCACertDER:        rootCACertDER,
+				CodeSigningCACertDER: codeSigningCACertDER,
+				Username:             username,
 			})
 			if err != nil {
 				log.Error("mobileconfig build failed", zap.Error(err))

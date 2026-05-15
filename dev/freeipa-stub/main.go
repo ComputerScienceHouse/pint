@@ -21,7 +21,10 @@ import (
 	"time"
 )
 
-const profileRadSecServer = "pint_radsec_server"
+const (
+	profileRadSecServer  = "pint_radsec_server"
+	profileCodeSigning   = "pint_profile_signing"
+)
 
 var serialCounter atomic.Int64
 
@@ -40,12 +43,13 @@ func main() {
 	wifiCAName := flag.String("wifi-ca", getEnv("PINT_IPA_WIRELESS_CA_NAME", "wireless"), "FreeIPA CA name for WiFi certs (PINT_IPA_WIRELESS_CA_NAME)")
 	radSecCAName := flag.String("radsec-ca", getEnv("PINT_IPA_RADSEC_CA_NAME", "radsec"), "FreeIPA CA name for RadSec certs (PINT_IPA_RADSEC_CA_NAME)")
 	rootCAName := flag.String("root-ca", getEnv("PINT_IPA_ROOT_CA_NAME", "ipa"), "FreeIPA root CA name (PINT_IPA_ROOT_CA_NAME)")
+	codeSigningCAName := flag.String("code-signing-ca", getEnv("PINT_IPA_CODE_SIGNING_CA_NAME", ""), "FreeIPA CA name for profile signing certs; leave empty to disable (PINT_IPA_CODE_SIGNING_CA_NAME)")
 	flag.Parse()
 
 	serialCounter.Store(time.Now().UnixNano())
 
 	var err error
-	caStore, err = loadOrInitCAs(*dataDir, *wifiCAName, *radSecCAName, *rootCAName)
+	caStore, err = loadOrInitCAs(*dataDir, *wifiCAName, *radSecCAName, *rootCAName, *codeSigningCAName)
 	if err != nil {
 		log.Fatalf("CA init: %v", err)
 	}
@@ -75,10 +79,10 @@ func main() {
 }
 
 // loadOrInitCAs loads persisted CA state from dir, or generates a fresh root +
-// two intermediates and persists them. The wifiCAName and radSecCAName are the
-// FreeIPA CA names PINT will use; they must match PINT_IPA_CA_NAME and
-// PINT_IPA_RADSEC_CA_NAME in .env.dev.
-func loadOrInitCAs(dir, wifiCAName, radSecCAName, rootCAName string) (map[string]*caEntry, error) {
+// intermediates and persists them. The CA names are the FreeIPA names PINT will
+// use and must match the corresponding env vars in .env.dev.
+// codeSigningCAName is optional: pass an empty string to skip that CA.
+func loadOrInitCAs(dir, wifiCAName, radSecCAName, rootCAName, codeSigningCAName string) (map[string]*caEntry, error) {
 	root, err := loadOrCreateCA(dir, "root", "PINT Dev Root CA", nil)
 	if err != nil {
 		return nil, fmt.Errorf("root CA: %w", err)
@@ -91,12 +95,25 @@ func loadOrInitCAs(dir, wifiCAName, radSecCAName, rootCAName string) (map[string
 	if err != nil {
 		return nil, fmt.Errorf("radsec CA: %w", err)
 	}
-	log.Printf("CA names: wifi=%q radsec=%q root=%q", wifiCAName, radSecCAName, rootCAName)
-	return map[string]*caEntry{
+
+	store := map[string]*caEntry{
 		wifiCAName:   wifi,
 		radSecCAName: radsec,
 		rootCAName:   root,
-	}, nil
+	}
+
+	if codeSigningCAName != "" {
+		codeSigning, err := loadOrCreateCA(dir, "code_signing", "PINT Dev Code Signing CA", root)
+		if err != nil {
+			return nil, fmt.Errorf("code signing CA: %w", err)
+		}
+		store[codeSigningCAName] = codeSigning
+		log.Printf("CA names: wifi=%q radsec=%q root=%q code_signing=%q", wifiCAName, radSecCAName, rootCAName, codeSigningCAName)
+	} else {
+		log.Printf("CA names: wifi=%q radsec=%q root=%q (code_signing disabled)", wifiCAName, radSecCAName, rootCAName)
+	}
+
+	return store, nil
 }
 
 func getEnv(key, fallback string) string {
@@ -312,13 +329,18 @@ func signCSR(csrPEM []byte, profileID string, ca *caEntry) ([]byte, error) {
 	eku := x509.ExtKeyUsageClientAuth
 	validity := 5 * 365 * 24 * time.Hour
 	var dnsNames []string
-	if profileID == profileRadSecServer {
+
+	switch profileID {
+	case profileRadSecServer:
 		eku = x509.ExtKeyUsageServerAuth
 		validity = 90 * 24 * time.Hour
 		// SANs are required by RFC 6125 / Go 1.15+ / OpenSSL for server certs.
 		if cn := csr.Subject.CommonName; cn != "" {
 			dnsNames = []string{cn}
 		}
+	case profileCodeSigning:
+		eku = x509.ExtKeyUsageCodeSigning
+		validity = 365 * 24 * time.Hour
 	}
 
 	keyUsage := x509.KeyUsageDigitalSignature

@@ -50,8 +50,9 @@ Three custom Dogtag certificate profiles control validity, key usage, and subjec
 | `pint_wifi` | EAP-TLS client certs for member devices | 5 years | `clientAuth` |
 | `pint_radsec_client` | mTLS client certs for WiFi controllers | 5 years | `clientAuth` |
 | `pint_radsec_server` | mTLS server cert for the FreeRADIUS RadSec listener | 90 days | `serverAuth` |
+| `pint_profile_signing` | CMS signing cert for iOS mobileconfig profiles | 1 year | `codeSigning` |
 
-Five-year validity on client certs minimises re-enrollment burden. The 90-day server cert is automatically renewed by PINT (see [RadSec Server Cert](#radsec-server-cert)).
+Five-year validity on client certs minimises re-enrollment burden. The 90-day server cert and 1-year profile signing cert are automatically renewed by PINT (see [RadSec Server Cert](#radsec-server-cert) and [Profile Signing Cert](#profile-signing-cert)).
 
 Profile config files live in `ipa/profiles/`. They must be imported into FreeIPA once before PINT can use them. Use `ipa/update_profile.py`, which supports three actions:
 
@@ -72,6 +73,7 @@ The corresponding environment variables (all optional; defaults shown):
 PINT_IPA_CERT_PROFILE=pint_wifi
 PINT_IPA_RADSEC_CLIENT_CERT_PROFILE=pint_radsec_client
 PINT_IPA_RADSEC_SERVER_CERT_PROFILE=pint_radsec_server
+PINT_IPA_CODE_SIGNING_CERT_PROFILE=pint_profile_signing
 ```
 
 ### WiFi Profile Generation
@@ -80,9 +82,11 @@ Members visit `/profile` and download a platform-specific package. PINT issues a
 
 | Platform | Output | Contents |
 |---|---|---|
-| iOS / macOS | `.mobileconfig` (Apple Configuration Profile) | PKCS#12 identity, WiFi CA cert, 802.1X/EAP-TLS config |
+| iOS / macOS | `.mobileconfig` (Apple Configuration Profile) | PKCS#12 identity, WiFi CA, root CA, 802.1X/EAP-TLS config; optionally CMS-signed |
 | Android | `.p12` (PKCS#12) | Client cert + key + WiFi CA, imported via Android WiFi settings |
 | Windows | `.xml` (WLAN profile) + `.p12` (PKCS#12) | EAP-TLS config and CA thumbprint; cert imported separately into the Windows certificate store |
+
+The iOS mobileconfig always embeds the WiFi intermediate CA and root CA so the full trust chain is installed in one step. When `PINT_IPA_CODE_SIGNING_CA_NAME` is set, PINT also embeds the code-signing intermediate CA and wraps the profile in a CMS `SignedData` envelope, letting iOS display it as "Verified" after the CA profile is trusted.
 
 ### WiFi Controller Enrollment
 
@@ -107,6 +111,7 @@ PINT manages FreeRADIUS entirely through the Kubernetes API with no direct proce
 flowchart LR
     P[PINT] -->|clients.json\nclients.conf\nradsec-tls.conf\nstatus config| CS[(pint-config\nSecret)]
     P -->|tls.crt · tls.key\nca.pem · wifi-ca.pem| RS[(pint-radsec-server-\ncertificates Secret)]
+    P -->|tls.crt · tls.key| PS[(pint-profile-signing-\ncert Secret)]
     P -->|patch restartedAt\nannotation| D[pint-freeradius\nDeployment]
     CS -->|volume mount\n/etc/pint/config/| FR[FreeRADIUS Pod]
     RS -->|volume mount\n/etc/pint/radsec/| FR
@@ -130,11 +135,23 @@ flowchart LR
 | `ca.pem` | RadSec CA chain used to verify controller client certs |
 | `wifi-ca.pem` | WiFi CA cert used to verify EAP-TLS user certs |
 
+**`pint-profile-signing-cert` Secret:** CMS signing identity for iOS mobileconfig profiles. Only created when `PINT_IPA_CODE_SIGNING_CA_NAME` is set.
+
+| Key | Description |
+|---|---|
+| `tls.crt` / `tls.key` | Profile signing certificate and private key |
+
 When any config changes, PINT patches the FreeRADIUS Deployment's `kubectl.kubernetes.io/restartedAt` annotation, triggering a rolling restart that picks up the new Secret contents.
 
 #### RadSec Server Cert
 
 At startup, PINT checks whether the RadSec server certificate has more than 30 days of validity remaining. If the cert is missing or nearing expiry, PINT requests a new `pint_radsec_server` certificate from FreeIPA, writes it to the Secret, and triggers a FreeRADIUS restart. A background goroutine repeats this check every 24 hours, so renewals are fully automatic.
+
+#### Profile Signing Cert
+
+When `PINT_IPA_CODE_SIGNING_CA_NAME` is set, PINT manages a CMS signing certificate using the same pattern as the RadSec server cert. At startup it checks the `pint-profile-signing-cert` Secret; if the cert is missing or within 30 days of expiry, PINT requests a new `pint_profile_signing` certificate from FreeIPA and stores it. A background goroutine renews it daily as needed. Unlike the RadSec cert, a renewed profile signing cert takes effect on the next PINT restart (no FreeRADIUS reload is required).
+
+The signature on a mobileconfig is only verified at installation time — existing installed profiles remain functional even if the signing cert later expires.
 
 ---
 
@@ -367,7 +384,10 @@ All configuration is via environment variables. Copy `.env.dev.example` to `.env
 | `PINT_IPA_ROOT_CA_NAME` | `ipa` | Root signing CA |
 | `PINT_IPA_CERT_PROFILE` | `pint_wifi` | Dogtag profile for WiFi certs |
 | `PINT_IPA_RADSEC_CLIENT_CERT_PROFILE` | `pint_radsec_client` | Dogtag profile for controller certs |
-| `PINT_IPA_RADSEC_SERVER_CERT_PROFILE` | `pint_radsec_server` | Dogtag profile for the server cert |
+| `PINT_IPA_RADSEC_SERVER_CERT_PROFILE` | `pint_radsec_server` | Dogtag profile for the RadSec server cert |
+| `PINT_IPA_CODE_SIGNING_CA_NAME` | _(unset)_ | FreeIPA intermediate CA for profile signing certs; enables iOS mobileconfig signing when set |
+| `PINT_IPA_CODE_SIGNING_CERT_PROFILE` | `pint_profile_signing` | Dogtag profile for the profile signing cert |
+| `PINT_PROFILE_SIGNING_CERT_SECRET` | `pint-profile-signing-cert` | K8s Secret for the profile signing cert and key |
 | `PINT_NAMESPACE` | `pint` | Kubernetes namespace |
 | `PINT_CONFIG_SECRET` | `pint-config` | K8s Secret for RADIUS config |
 | `PINT_RADSEC_CERT_SECRET` | `pint-radsec-server-certificates` | K8s Secret for RadSec TLS material |
@@ -388,11 +408,14 @@ On first run the stub generates a three-tier CA hierarchy and persists it to `de
 
 ```
 Root CA (ipa)
-├── WiFi CA  (wireless)   # signs pint_wifi and pint_radsec_server certs
-└── RadSec CA (radsec)    # signs pint_radsec_client certs
+├── WiFi CA  (wireless)              # signs pint_wifi and pint_radsec_server certs
+├── RadSec CA (radsec)               # signs pint_radsec_client certs
+└── Code Signing CA (code_signing)   # signs pint_profile_signing certs (optional)
 ```
 
 The CA names are read from `PINT_IPA_WIRELESS_CA_NAME`, `PINT_IPA_RADSEC_CA_NAME`, and `PINT_IPA_ROOT_CA_NAME` at startup and must match the values in `.env.dev`. On subsequent runs the persisted keys and certificates are reloaded, so issued certificates remain valid across restarts.
+
+Profile signing is **optional in local dev**. To enable it, uncomment the three `PINT_IPA_CODE_SIGNING_CA_NAME` lines in `.env.dev`. On the next `make dev` run the stub will generate a `code_signing` intermediate CA under the root, persist it to `dev/freeipa-stub/data/`, and handle `cert_request` calls for the `pint_profile_signing` profile with `codeSigning` EKU. Leaving the variable unset skips signing entirely; PINT starts normally and generates unsigned profiles.
 
 **Implemented RPC methods**
 
@@ -406,7 +429,13 @@ Authentication (`/ipa/session/login_password`) accepts any credentials and retur
 
 **Profile handling**
 
-The stub is aware of one specific profile ID: `pint_radsec_server`. Certificates issued with that profile receive `serverAuth` EKU, 90-day validity, and a DNS SAN set to the CSR's CN (required for Go's TLS verification of server certificates). All other profile IDs, including `pint_wifi` and `pint_radsec_client`, receive `clientAuth` EKU and 5-year validity.
+The stub maps profile IDs to EKU and validity:
+
+| Profile ID | EKU | Validity | Notes |
+|---|---|---|---|
+| `pint_radsec_server` | `serverAuth` | 90 days | DNS SAN set to CSR CN (required for Go TLS verification) |
+| `pint_profile_signing` | `codeSigning` | 1 year | Only available when `PINT_IPA_CODE_SIGNING_CA_NAME` is set |
+| all others (`pint_wifi`, `pint_radsec_client`, …) | `clientAuth` | 5 years | |
 
 Unlike real FreeIPA/Dogtag, the stub does not enforce subject name patterns or key type constraints defined in the profile config files.
 
