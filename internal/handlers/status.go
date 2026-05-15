@@ -8,6 +8,7 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
@@ -61,17 +62,20 @@ func StatusPageHandler(cfg *config.Config, k8s kubernetes.Interface, metricsClie
 
 // ReloadHandler serves POST /status/reload — triggers a FreeRADIUS rollout restart.
 // Only RTPs may trigger this; non-RTPs receive 403.
-func ReloadHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
+func ReloadHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !isRTP(c) {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
+		actor, _ := getUsername(c)
 		if err := radius.Reload(c.Request.Context(), k8s, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
+			log.Error("manual freeradius reload failed", zap.String("actor", actor), zap.Error(err))
 			dest := "/status?warn=" + url.QueryEscape("Rollout restart failed: "+err.Error())
 			c.Redirect(http.StatusFound, dest)
 			return
 		}
+		log.Info("manual freeradius reload triggered", zap.String("actor", actor))
 		c.Redirect(http.StatusFound, "/status?success=FreeRADIUS+rollout+restart+triggered")
 	}
 }

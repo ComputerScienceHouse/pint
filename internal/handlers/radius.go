@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"net/netip"
@@ -18,6 +17,7 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -42,7 +42,7 @@ func RadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM 
 
 // SaveSecretHandler serves POST /radius/secret (initial enrollment).
 // Renders the page directly with the one-time key and cert PEM.
-func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
+func SaveSecretHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
@@ -52,9 +52,11 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
 		if err != nil {
+			log.Error("radius enrollment failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		log.Info("radius credentials issued", zap.String("serial", entry.CertSerial))
 		if ipCIDR != "" {
 			entry.IPCIDR = &ipCIDR
 		}
@@ -66,7 +68,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 		}
 		store.Upsert(*entry)
 
-		if _, err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, log, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -76,7 +78,7 @@ func SaveSecretHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 
 // RegenerateHandler serves POST /radius/regenerate.
 // Revokes the existing cert, issues new credentials, and renders once with the new key/cert PEM.
-func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
+func RegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 
@@ -86,19 +88,21 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 			return
 		}
 		existing := store.FindByUsername(nav.Username)
-		revokeExistingCert(ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
+		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
 
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
 		if err != nil {
+			log.Error("radius credential regeneration failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		log.Info("radius credentials regenerated", zap.String("serial", entry.CertSerial))
 		if existing != nil {
 			entry.IPCIDR = existing.IPCIDR
 		}
 		store.Upsert(*entry)
 
-		if _, err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, log, store, k8s, cfg); err != nil {
 			return
 		}
 
@@ -107,7 +111,7 @@ func RegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubern
 }
 
 // UpdateIPHandler serves POST /radius/update-ip, changes source IP only.
-func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
+func UpdateIPHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 
@@ -130,16 +134,17 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFu
 		updated.IPCIDR = &ipCIDR
 		store.Upsert(updated)
 
-		if _, err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, log, store, k8s, cfg); err != nil {
 			return
 		}
 
+		log.Info("radius source IP updated", zap.String("ip_cidr", ipCIDR))
 		c.Redirect(http.StatusFound, "/radius")
 	}
 }
 
 // DeleteSecretHandler serves POST /radius/delete, revokes cert and removes config.
-func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient *freeipa.Client) gin.HandlerFunc {
+func DeleteSecretHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface, ipaClient *freeipa.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username, _ := getUsername(c)
 
@@ -148,13 +153,14 @@ func DeleteSecretHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		revokeExistingCert(ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
+		revokeExistingCert(log, ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
 		store.Delete(username)
 
-		if _, err := commitStore(c, store, k8s, cfg); err != nil {
+		if _, err := commitStore(c, log, store, k8s, cfg); err != nil {
 			return
 		}
 
+		log.Info("radius credentials deleted")
 		c.Redirect(http.StatusFound, "/radius")
 	}
 }
@@ -193,19 +199,23 @@ func radiusPageData(c *gin.Context, nav navInfo, radiusServer string, client *ra
 // the store was saved successfully; fatalErr aborts the response and should cause the
 // caller to return immediately.
 // Member-facing callers discard the reload warning intentionally — only admin handlers surface it.
-func commitStore(c *gin.Context, store *radius.ClientStore, k8s kubernetes.Interface, cfg *config.Config) (string, error) {
+func commitStore(c *gin.Context, log *zap.Logger, store *radius.ClientStore, k8s kubernetes.Interface, cfg *config.Config) (string, error) {
 	ctx := c.Request.Context()
 	if err := store.Save(ctx); err != nil {
+		log.Error("radius store save failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return "", err
 	}
 	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.ConfigSecret, store.All()); err != nil {
+		log.Error("radius config write failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return "", err
 	}
 	if err := radius.Reload(ctx, k8s, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
+		log.Warn("freeradius reload failed", zap.Error(err))
 		return err.Error(), nil
 	}
+	log.Debug("freeradius reloaded")
 	return "", nil
 }
 
@@ -263,18 +273,20 @@ func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, usern
 
 // revokeExistingCert revokes the cert identified by client.CertSerial.
 // Errors are logged but not returned; revocation failure should not block deletion or reissuance.
-func revokeExistingCert(ipaClient *freeipa.Client, client *radius.RadiusClient, caName string, reason int) {
+func revokeExistingCert(log *zap.Logger, ipaClient *freeipa.Client, client *radius.RadiusClient, caName string, reason int) {
 	if client == nil || client.CertSerial == "" {
 		return
 	}
 	serial, err := strconv.ParseInt(client.CertSerial, 10, 64)
 	if err != nil {
-		log.Printf("revokeExistingCert: invalid serial %q: %v", client.CertSerial, err)
+		log.Warn("revokeExistingCert: invalid serial", zap.String("serial", client.CertSerial), zap.Error(err))
 		return
 	}
 	if err := ipaClient.CertRevoke(serial, caName, reason); err != nil {
-		log.Printf("revokeExistingCert: cert_revoke serial=%d: %v (continuing)", serial, err)
+		log.Warn("cert revocation failed, continuing", zap.Int64("serial", serial), zap.Int("reason", reason), zap.Error(err))
+		return
 	}
+	log.Info("cert revoked", zap.Int64("serial", serial), zap.Int("reason", reason))
 }
 
 // parseMemberIP reads ip_cidr from POST form and requires a single bare IP address.

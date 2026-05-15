@@ -46,8 +46,8 @@ func TestIndexHandler(t *testing.T) {
 	if w.Code != http.StatusFound {
 		t.Errorf("status = %d, want 302", w.Code)
 	}
-	if loc := w.Header().Get("Location"); loc != loginURL {
-		t.Errorf("Location = %q, want %q", loc, loginURL)
+	if loc := w.Header().Get("Location"); loc != loginURL+"?referer=/dashboard" {
+		t.Errorf("Location = %q, want %q", loc, loginURL+"?referer=/dashboard")
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -17,10 +16,12 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
+	"github.com/ComputerScienceHouse/pint/internal/logger"
 	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -32,72 +33,80 @@ import (
 const radSecRenewBefore = 30 * 24 * time.Hour
 
 func main() {
+	log, err := logger.New()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "logger init: %v\n", err)
+		os.Exit(1)
+	}
+	defer log.Sync() //nolint:errcheck
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		log.Fatal("config load failed", zap.Error(err))
 	}
 
 	// FreeIPA client: authenticate at startup
 	ipaClient := freeipa.New(cfg.IPAHost, cfg.IPAPrincipal, cfg.IPAPassword, cfg.IPASkipTLSVerify)
 	if err := ipaClient.Login(); err != nil {
-		log.Fatalf("freeipa login: %v", err)
+		log.Fatal("freeipa login failed", zap.Error(err))
 	}
+	log.Info("freeipa authenticated", zap.String("host", cfg.IPAHost), zap.String("principal", cfg.IPAPrincipal))
 
 	// Kubernetes client: try in-cluster first, fall back to kubeconfig
 	restCfg, err := rest.InClusterConfig()
 	if err != nil {
 		restCfg, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 		if err != nil {
-			log.Fatalf("kubernetes config: %v", err)
+			log.Fatal("kubernetes config failed", zap.Error(err))
 		}
-		log.Println("using kubeconfig (local dev mode)")
+		log.Info("kubernetes: using kubeconfig (local dev mode)")
 	}
 	k8sClient, err := kubernetes.NewForConfig(restCfg)
 	if err != nil {
-		log.Fatalf("kubernetes client: %v", err)
+		log.Fatal("kubernetes client init failed", zap.Error(err))
 	}
 
 	// Metrics client is optional; absent if metrics-server is not installed.
 	metricsClient, err := metricsv.NewForConfig(restCfg)
 	if err != nil {
-		log.Printf("metrics client unavailable (continuing without pod metrics): %v", err)
+		log.Warn("metrics client unavailable, continuing without pod metrics", zap.Error(err))
 		metricsClient = nil
 	}
 
 	// Initialize RADIUS secrets with empty content if they don't exist yet.
 	if err := radius.EnsureConfigSecret(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret); err != nil {
-		log.Fatalf("init radius secrets: %v", err)
+		log.Fatal("init radius secrets failed", zap.Error(err))
 	}
 
 	// Ensure FreeRADIUS status server is configured.
 	statusSecret, err := radius.EnsureStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret)
 	if err != nil {
-		log.Fatalf("ensure status secret: %v", err)
+		log.Fatal("ensure status secret failed", zap.Error(err))
 	}
 	statusConf := radius.RenderStatusConfig(statusSecret, "0.0.0.0/0")
 	updated, err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, statusConf)
 	if err != nil {
-		log.Fatalf("write status config: %v", err)
+		log.Fatal("write status config failed", zap.Error(err))
 	}
 	if updated {
-		log.Printf("updated FreeRADIUS status config, triggering rollout restart")
+		log.Info("updated FreeRADIUS status config, triggering rollout restart")
 		if err := radius.Reload(context.Background(), k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-			log.Printf("status config reload failed: %v", err)
+			log.Warn("status config reload failed", zap.Error(err))
 		}
 	}
 
 	tlsUpdated, err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.RadSecCheckCRL)
 	if err != nil {
-		log.Fatalf("write radsec-tls.conf: %v", err)
+		log.Fatal("write radsec-tls.conf failed", zap.Error(err))
 	}
 	if tlsUpdated {
-		log.Printf("updated radsec-tls.conf (check_crl=%v), triggering rollout restart", cfg.RadSecCheckCRL)
+		log.Info("updated radsec-tls.conf, triggering rollout restart", zap.Bool("check_crl", cfg.RadSecCheckCRL))
 		if err := radius.Reload(context.Background(), k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-			log.Printf("radsec tls config reload failed: %v", err)
+			log.Warn("radsec tls config reload failed", zap.Error(err))
 		}
 	}
 
-	// Fetch all three CA certs and the RadSec server cert in parallel.
+	// Fetch all three CA certs in parallel.
 	var (
 		caDER           []byte
 		radSecCACertDER []byte
@@ -112,17 +121,22 @@ func main() {
 	wg.Wait()
 	for i, e := range certErr {
 		if e != nil {
-			log.Fatalf("freeipa ca_show[%d]: %v", i, e)
+			log.Fatal("freeipa ca_show failed", zap.Int("index", i), zap.Error(e))
 		}
 	}
+
 	logCACert := func(name string, der []byte) {
 		cert, err := x509.ParseCertificate(der)
 		if err != nil {
-			log.Printf("%s: %d bytes (could not parse: %v)", name, len(der), err)
+			log.Warn("CA cert parse failed", zap.String("ca", name), zap.Int("bytes", len(der)), zap.Error(err))
 			return
 		}
 		remaining := time.Until(cert.NotAfter).Truncate(time.Hour)
-		log.Printf("%s: valid until %s (%s remaining)", name, cert.NotAfter.Format("2006-01-02"), formatDuration(remaining))
+		log.Info("CA cert loaded",
+			zap.String("ca", name),
+			zap.String("valid_until", cert.NotAfter.Format("2006-01-02")),
+			zap.String("remaining", formatDuration(remaining)),
+		)
 	}
 	logCACert("WiFi CA", caDER)
 	logCACert("RadSec CA", radSecCACertDER)
@@ -133,44 +147,50 @@ func main() {
 	wifiCAPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})
 
 	// Load or renew FreeRADIUS server TLS cert
-	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM); err != nil {
-		log.Fatalf("radsec server cert: %v", err)
+	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM); err != nil {
+		log.Fatal("radsec server cert failed", zap.Error(err))
 	}
 
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
-	go watchRadSecServerCert(k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
+	go watchRadSecServerCert(log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
 
 	// Load Apple profile signing identity if configured.
 	var appleSigner *profile.Signer
 	if cfg.AppleSigningCertPath != "" {
 		p12Data, readErr := os.ReadFile(cfg.AppleSigningCertPath)
 		if readErr != nil {
-			log.Fatalf("apple signing cert: read %s: %v", cfg.AppleSigningCertPath, readErr)
+			log.Fatal("apple signing cert read failed", zap.String("path", cfg.AppleSigningCertPath), zap.Error(readErr))
 		}
 		privKey, cert, _, p12Err := pkcs12.DecodeChain(p12Data, cfg.AppleSigningCertPassword)
 		if p12Err != nil {
-			log.Fatalf("apple signing cert: decode p12: %v", p12Err)
+			log.Fatal("apple signing cert decode failed", zap.Error(p12Err))
 		}
 		signer, ok := privKey.(crypto.Signer)
 		if !ok {
-			log.Fatalf("apple signing cert: private key does not implement crypto.Signer")
+			log.Fatal("apple signing cert: private key does not implement crypto.Signer")
 		}
 		appleSigner = &profile.Signer{Cert: cert, Key: signer}
-		log.Printf("apple profile signing enabled (subject: %s)", cert.Subject.CommonName)
+		log.Info("apple profile signing enabled", zap.String("subject", cert.Subject.CommonName))
 	}
 
-	r := gin.Default()
+	if cfg.DisableOIDC {
+		gin.SetMode(gin.DebugMode)
+	} else {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
+	r := gin.New()
+	r.Use(handlers.ZapLogger(log), gin.Recovery())
 	r.HTMLRender = buildTemplates()
 
 	var authMiddleware gin.HandlerFunc
 	if cfg.DisableOIDC {
-		log.Printf("WARNING: OIDC disabled — injecting static dev user")
+		log.Warn("OIDC disabled — injecting static dev user")
 		authMiddleware = handlers.DevAuthMiddleware()
 		r.GET("/auth/login", func(c *gin.Context) { c.Redirect(http.StatusFound, "/dashboard") })
 		r.GET("/auth/callback", func(c *gin.Context) { c.Redirect(http.StatusFound, "/dashboard") })
 		r.GET("/auth/logout", func(c *gin.Context) { c.Redirect(http.StatusFound, "/") })
 	} else {
-		// csh-auth v2: package-level Init returns (Auth, error)
 		auth, err := cshauth.Init(
 			cfg.ClientID,
 			cfg.ClientSecret,
@@ -180,7 +200,7 @@ func main() {
 			[]string{"openid", "profile", "groups"},
 		)
 		if err != nil {
-			log.Fatalf("csh-auth init: %v", err)
+			log.Fatal("csh-auth init failed", zap.Error(err))
 		}
 		authMiddleware = auth.CookieMiddleware()
 		r.GET("/auth/login", auth.HandleLogin)
@@ -199,33 +219,33 @@ func main() {
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
-		protected.POST("/profile/generate", handlers.GenerateProfileHandler(ipaClient, cfg, caDER, appleSigner))
+		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, appleSigner))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/secret", handlers.SaveSecretHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/regenerate", handlers.RegenerateHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/update-ip", handlers.UpdateIPHandler(cfg, k8sClient))
-		protected.POST("/radius/delete", handlers.DeleteSecretHandler(cfg, k8sClient, ipaClient))
+		protected.POST("/radius/secret", handlers.SaveSecretHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
+		protected.POST("/radius/regenerate", handlers.RegenerateHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
+		protected.POST("/radius/update-ip", handlers.UpdateIPHandler(log, cfg, k8sClient))
+		protected.POST("/radius/delete", handlers.DeleteSecretHandler(log, cfg, k8sClient, ipaClient))
 		protected.GET("/radius/ca", handlers.RadSecCAHandler(radSecCAChainPEM))
 
 		protected.GET("/status", handlers.StatusPageHandler(cfg, k8sClient, metricsClient))
-		protected.POST("/status/reload", handlers.ReloadHandler(cfg, k8sClient))
+		protected.POST("/status/reload", handlers.ReloadHandler(log, cfg, k8sClient))
 
 		admin := protected.Group("/admin")
 		admin.Use(handlers.RequireRTP)
 		{
 			admin.GET("/radius", handlers.AdminRadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
-			admin.POST("/radius/delete", handlers.AdminDeleteHandler(cfg, k8sClient, ipaClient))
-			admin.POST("/radius/regenerate", handlers.AdminRegenerateHandler(ipaClient, cfg, k8sClient))
-			admin.POST("/radius/root/provision", handlers.AdminRootProvisionHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
-			admin.POST("/radius/root/regenerate", handlers.AdminRootRegenerateHandler(ipaClient, cfg, k8sClient, radSecCAChainPEM))
-			admin.POST("/radius/root/update-ip", handlers.AdminRootUpdateIPHandler(cfg, k8sClient))
+			admin.POST("/radius/delete", handlers.AdminDeleteHandler(log, cfg, k8sClient, ipaClient))
+			admin.POST("/radius/regenerate", handlers.AdminRegenerateHandler(log, ipaClient, cfg, k8sClient))
+			admin.POST("/radius/root/provision", handlers.AdminRootProvisionHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
+			admin.POST("/radius/root/regenerate", handlers.AdminRootRegenerateHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
+			admin.POST("/radius/root/update-ip", handlers.AdminRootUpdateIPHandler(log, cfg, k8sClient))
 		}
 	}
 
-	log.Printf("starting PINT on :8080")
+	log.Info("starting PINT", zap.String("addr", ":8080"))
 	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("server: %v", err)
+		log.Fatal("server exited", zap.Error(err))
 	}
 }
 
@@ -252,7 +272,7 @@ func buildTemplates() multitemplate.Render {
 // loadOrRenewRadSecServerCert reads the existing FreeRADIUS TLS cert from the K8s Secret.
 // If it exists and has more than radSecRenewBefore of validity remaining, it is used as-is
 // and renewed is false. Otherwise a new cert is issued and renewed is true.
-func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
+func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
 	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.RadSecCertSecret, metav1.GetOptions{})
 	if err == nil {
 		existing := secret.Data["tls.crt"]
@@ -262,7 +282,7 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 			if block != nil {
 				cert, parseErr := x509.ParseCertificate(block.Bytes)
 				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
-					log.Printf("reusing existing RadSec server cert (expires %s)", cert.NotAfter.Format(time.RFC3339))
+					log.Info("reusing existing RadSec server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
 					return existing, key, false, nil
 				}
 			}
@@ -290,28 +310,28 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, newCertPEM, newKeyPEM, caPEM, wifiCAPEM); writeErr != nil {
 		return nil, nil, false, fmt.Errorf("write radsec cert: %w", writeErr)
 	}
-	log.Printf("issued and stored new RadSec server cert")
+	log.Info("issued and stored new RadSec server cert")
 	return newCertPEM, newKeyPEM, true, nil
 }
 
 // watchRadSecServerCert runs forever, checking every 24 hours whether the RadSec server
 // cert needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up
 // without a full restart.
-func watchRadSecServerCert(k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) {
+func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
 		ctx := context.Background()
-		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, k8sClient, ipaClient, cfg, caPEM, wifiCAPEM)
+		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, log, k8sClient, ipaClient, cfg, caPEM, wifiCAPEM)
 		if err != nil {
-			log.Printf("radsec cert watcher: renewal failed: %v", err)
+			log.Error("radsec cert renewal failed", zap.Error(err))
 			continue
 		}
 		if renewed {
 			if err := radius.Reload(ctx, k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-				log.Printf("radsec cert watcher: freeradius reload failed: %v", err)
+				log.Error("radsec cert watcher: freeradius reload failed", zap.Error(err))
 			} else {
-				log.Printf("radsec cert watcher: renewed cert and reloaded freeradius")
+				log.Info("radsec cert watcher: renewed cert and reloaded freeradius")
 			}
 		}
 	}

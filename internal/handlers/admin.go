@@ -9,6 +9,7 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -35,7 +36,7 @@ func AdminRadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChai
 }
 
 // AdminDeleteHandler serves POST /admin/radius/delete — revokes cert and removes a user's client entry.
-func AdminDeleteHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient *freeipa.Client) gin.HandlerFunc {
+func AdminDeleteHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface, ipaClient *freeipa.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username := c.PostForm("username")
 		if username == "" {
@@ -47,18 +48,19 @@ func AdminDeleteHandler(cfg *config.Config, k8s kubernetes.Interface, ipaClient 
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		revokeExistingCert(ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
+		revokeExistingCert(log, ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
 		store.Delete(username)
-		reloadWarn, err := commitStore(c, store, k8s, cfg)
+		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
 		if err != nil {
 			return
 		}
+		log.Info("admin: radius credentials deleted", zap.String("target", username))
 		c.Redirect(http.StatusFound, adminRadiusRedirect(username+" removed", reloadWarn))
 	}
 }
 
 // AdminRegenerateHandler serves POST /admin/radius/regenerate — reissues credentials for any user.
-func AdminRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
+func AdminRegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		username := c.PostForm("username")
 		if username == "" {
@@ -71,9 +73,10 @@ func AdminRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s k
 			return
 		}
 		existing := store.FindByUsername(username)
-		revokeExistingCert(ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
+		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
 		entry, _, _, err := issueClientCredentials(ipaClient, cfg, username)
 		if err != nil {
+			log.Error("admin: credential regeneration failed", zap.String("target", username), zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -81,16 +84,17 @@ func AdminRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s k
 			entry.IPCIDR = existing.IPCIDR
 		}
 		store.Upsert(*entry)
-		reloadWarn, err := commitStore(c, store, k8s, cfg)
+		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
 		if err != nil {
 			return
 		}
+		log.Info("admin: radius credentials regenerated", zap.String("target", username), zap.String("serial", entry.CertSerial))
 		c.Redirect(http.StatusFound, adminRadiusRedirect("Credentials regenerated for "+username, reloadWarn))
 	}
 }
 
 // AdminRootProvisionHandler serves POST /admin/radius/root/provision.
-func AdminRootProvisionHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
+func AdminRootProvisionHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
@@ -104,14 +108,16 @@ func AdminRootProvisionHandler(ipaClient *freeipa.Client, cfg *config.Config, k8
 		}
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername)
 		if err != nil {
+			log.Error("admin: root client provisioning failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		store.Upsert(*entry)
-		reloadWarn, err := commitStore(c, store, k8s, cfg)
+		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
 		if err != nil {
 			return
 		}
+		log.Info("admin: root radius client provisioned", zap.String("serial", entry.CertSerial))
 		renderRootCredsPage(c, nav, store, entry, keyPEM, certPEM, caChainPEM,
 			"Organization controller provisioned — save credentials now, they will not be shown again",
 			reloadWarn)
@@ -119,7 +125,7 @@ func AdminRootProvisionHandler(ipaClient *freeipa.Client, cfg *config.Config, k8
 }
 
 // AdminRootRegenerateHandler serves POST /admin/radius/root/regenerate.
-func AdminRootRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
+func AdminRootRegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		nav, _ := getNavInfo(c)
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
@@ -128,9 +134,10 @@ func AdminRootRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k
 			return
 		}
 		existing := store.FindByUsername(rootUsername)
-		revokeExistingCert(ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
+		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
 		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername)
 		if err != nil {
+			log.Error("admin: root credential regeneration failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -138,10 +145,11 @@ func AdminRootRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k
 			entry.IPCIDR = existing.IPCIDR
 		}
 		store.Upsert(*entry)
-		reloadWarn, err := commitStore(c, store, k8s, cfg)
+		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
 		if err != nil {
 			return
 		}
+		log.Info("admin: root radius credentials regenerated", zap.String("serial", entry.CertSerial))
 		renderRootCredsPage(c, nav, store, entry, keyPEM, certPEM, caChainPEM,
 			"Organization controller credentials regenerated — save the new key and cert now",
 			reloadWarn)
@@ -149,7 +157,7 @@ func AdminRootRegenerateHandler(ipaClient *freeipa.Client, cfg *config.Config, k
 }
 
 // AdminRootUpdateIPHandler serves POST /admin/radius/root/update-ip.
-func AdminRootUpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
+func AdminRootUpdateIPHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
 		if err := store.Load(c.Request.Context()); err != nil {
@@ -172,10 +180,11 @@ func AdminRootUpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.
 			updated.IPCIDR = nil
 		}
 		store.Upsert(updated)
-		reloadWarn, err := commitStore(c, store, k8s, cfg)
+		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
 		if err != nil {
 			return
 		}
+		log.Info("admin: root radius source IP updated", zap.String("ip_cidr", ipCIDR))
 		c.Redirect(http.StatusFound, adminRadiusRedirect("Source IP updated for organization controller", reloadWarn))
 	}
 }
@@ -200,7 +209,7 @@ func renderRootCredsPage(c *gin.Context, nav navInfo, store *radius.ClientStore,
 func adminRadiusRedirect(success, reloadWarn string) string {
 	dest := "/admin/radius?success=" + url.QueryEscape(success)
 	if reloadWarn != "" {
-		dest += "&warn=" + url.QueryEscape("FreeRADIUS reload failed: " + reloadWarn)
+		dest += "&warn=" + url.QueryEscape("FreeRADIUS reload failed: "+reloadWarn)
 	}
 	return dest
 }
