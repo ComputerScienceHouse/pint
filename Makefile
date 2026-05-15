@@ -7,9 +7,12 @@ NAMESPACE       = pint
 FR_IMAGE        = pint-freeradius:dev
 SMOKETEST_IMAGE = pint-smoketest:dev
 SMOKETEST_POD   = pint-radsec-smoketest
+GIT_COMMIT      ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
+VERSION_PKG      = github.com/ComputerScienceHouse/pint/internal/version
+LDFLAGS          = -ldflags "-X $(VERSION_PKG).GitCommit=$(GIT_COMMIT)"
 
 build:
-	go build -o $(BINARY) ./cmd/pint/
+	go build $(LDFLAGS) -o $(BINARY) ./cmd/pint/
 
 build-stub:
 	go build -o $(STUB) ./dev/freeipa-stub/

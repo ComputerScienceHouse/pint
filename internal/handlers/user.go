@@ -8,6 +8,7 @@ import (
 	"os"
 
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
+	"github.com/ComputerScienceHouse/pint/internal/version"
 	"github.com/gin-gonic/gin"
 )
 
@@ -27,6 +28,7 @@ func (n navInfo) toMap() gin.H {
 		"AvatarURL":   n.AvatarURL,
 		"IsRTP":       n.IsRTP,
 		"CurrentPath": n.CurrentPath,
+		"GitCommit":   version.GitCommit,
 	}
 }
 
