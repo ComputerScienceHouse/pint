@@ -55,7 +55,7 @@ func BuildPKCS12(key crypto.Signer, certDER, caDER []byte, password string) ([]b
 		return nil, fmt.Errorf("parse CA cert: %w", err)
 	}
 
-	p12, err := pkcs12.Modern.Encode(key, cert, []*x509.Certificate{ca}, password)
+	p12, err := pkcs12.Legacy.Encode(key, cert, []*x509.Certificate{ca}, password)
 	if err != nil {
 		return nil, fmt.Errorf("encode PKCS12: %w", err)
 	}
