@@ -126,11 +126,7 @@ func UpdateIPHandler(cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFu
 			return
 		}
 		updated := *existing
-		if ipCIDR != "" {
-			updated.IPCIDR = &ipCIDR
-		} else {
-			updated.IPCIDR = nil
-		}
+		updated.IPCIDR = &ipCIDR
 		store.Upsert(updated)
 
 		if _, err := commitStore(c, store, k8s, cfg); err != nil {
