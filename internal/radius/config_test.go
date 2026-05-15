@@ -9,7 +9,7 @@ import (
 )
 
 func TestRenderRadSecTLS_CRLEnabled(t *testing.T) {
-	out := radius.RenderRadSecTLS(true)
+	out := radius.RenderRadSecTLS(true, false)
 	if !strings.Contains(out, "check_crl      = yes") {
 		t.Error("expected check_crl = yes when checkCRL=true")
 	}
@@ -19,9 +19,29 @@ func TestRenderRadSecTLS_CRLEnabled(t *testing.T) {
 }
 
 func TestRenderRadSecTLS_CRLDisabled(t *testing.T) {
-	out := radius.RenderRadSecTLS(false)
+	out := radius.RenderRadSecTLS(false, false)
 	if !strings.Contains(out, "check_crl      = no") {
 		t.Error("expected check_crl = no when checkCRL=false")
+	}
+}
+
+func TestRenderRadSecTLS_ProxyProtocolEnabled(t *testing.T) {
+	out := radius.RenderRadSecTLS(false, true)
+	if !strings.Contains(out, "proxy_protocol = true") {
+		t.Error("expected proxy_protocol = true when proxyProtocol=true")
+	}
+	// proxy_protocol directive must appear before the tls{} block (both inside listen{})
+	haproxyIdx := strings.Index(out, "proxy_protocol = true")
+	tlsIdx := strings.Index(out, "tls {")
+	if haproxyIdx > tlsIdx {
+		t.Error("haproxy directive must appear before tls{} block")
+	}
+}
+
+func TestRenderRadSecTLS_ProxyProtocolDisabled(t *testing.T) {
+	out := radius.RenderRadSecTLS(false, false)
+	if strings.Contains(out, "proxy_protocol") {
+		t.Error("proxy_protocol directive must be absent when proxyProtocol=false")
 	}
 }
 

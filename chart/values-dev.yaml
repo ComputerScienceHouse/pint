@@ -12,7 +12,7 @@ config:
   serverURL: http://localhost:8080
   ipaHost: localhost:8088
   ipaServiceAccount: pint
-  ipaCAName: ipa
+  ipaWirelessCAName: wireless
   ipaRadSecCAName: radsec
   ipaRootCAName: ipa
   ipaSkipTLSVerify: true

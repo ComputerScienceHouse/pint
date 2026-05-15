@@ -28,7 +28,7 @@
     },
     "config": {
       "type": "object",
-      "description": "Non-sensitive PINT application configuration, rendered into a ConfigMap.",
+      "description": "Non-sensitive PINT application configuration, rendered as env vars on the Deployment.",
       "properties": {
         "clientID": {
           "type": "string",
@@ -46,10 +46,10 @@
           "type": "string",
           "description": "FreeIPA service account DN used to issue certificates."
         },
-        "ipaCAName": {
+        "ipaWirelessCAName": {
           "type": "string",
           "description": "FreeIPA CA name for WiFi client certificates.",
-          "default": "ipa"
+          "default": "wireless"
         },
         "ipaRadSecCAName": {
           "type": "string",
@@ -81,6 +81,33 @@
           "description": "Skip TLS verification when connecting to FreeIPA. For development only.",
           "default": false
         },
+        "radSecCheckCRL": {
+          "type": "boolean",
+          "description": "Enable CRL checking in the RadSec TLS listener. Set false to disable.",
+          "default": true
+        },
+        "radSecProxyProtocol": {
+          "type": "boolean",
+          "description": "Enable PROXY protocol on the RadSec listener. Required when HAProxy fronts FreeRADIUS.",
+          "default": false
+        },
+        "radSecStatusPort": {
+          "type": "string",
+          "description": "Override the FreeRADIUS status server port (default: 18121)."
+        },
+        "radSecStatusAddr": {
+          "type": "string",
+          "description": "Override the status server address (host:port). Useful in dev when pod IPs are unreachable."
+        },
+        "codeSigningCAName": {
+          "type": "string",
+          "description": "FreeIPA CA name for the iOS mobileconfig code signing certificate. Leave empty to disable profile signing."
+        },
+        "codeSigningCertProfile": {
+          "type": "string",
+          "description": "Dogtag certificate profile for the mobileconfig signing cert.",
+          "default": "pint_profile_signing"
+        },
         "wifiSSID": {
           "type": "string",
           "description": "WiFi SSID embedded in generated device profiles.",
@@ -91,7 +118,7 @@
           "description": "RadSec server address shown to users (e.g. radius.csh.rit.edu:2083)."
         }
       },
-      "required": ["clientID", "serverURL", "ipaHost", "ipaServiceAccount", "ipaCAName", "ipaRadSecCAName", "wifiSSID", "radiusServer"]
+      "required": ["clientID", "serverURL", "ipaHost", "ipaServiceAccount", "ipaWirelessCAName", "ipaRadSecCAName", "wifiSSID", "radiusServer"]
     },
     "secrets": {
       "type": "object",
@@ -104,6 +131,10 @@
         "radSecCert": {
           "type": "string",
           "description": "Secret storing the FreeRADIUS TLS certificate and key. Defaults to '<fullname>-radsec-server-certificates'."
+        },
+        "profileSigningCert": {
+          "type": "string",
+          "description": "Secret storing the iOS mobileconfig signing certificate and key. Defaults to '<fullname>-profile-signing-cert'. Only created when codeSigningCAName is set."
         }
       }
     },
@@ -190,6 +221,12 @@
             "nodePort": {
               "type": ["integer", "null"],
               "description": "NodePort number. Only used when service.type is NodePort."
+            },
+            "externalTrafficPolicy": {
+              "type": "string",
+              "enum": ["Cluster", "Local"],
+              "description": "ExternalTrafficPolicy for NodePort/LoadBalancer services. Use Local to preserve client IPs (required for HAProxy PROXY protocol).",
+              "default": "Local"
             }
           }
         },
@@ -206,6 +243,10 @@
               "type": "string",
               "description": "Source CIDR allowed to query the status server.",
               "default": "0.0.0.0/0"
+            },
+            "nodePort": {
+              "type": ["integer", "null"],
+              "description": "NodePort for the status server port. Dev only; PINT queries pods directly in production."
             }
           }
         }

@@ -31,8 +31,8 @@ func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace,
 
 // WriteRadSecTLS renders and patches the radsec-tls.conf key in the named K8s Secret.
 // Returns (didUpdate, err). didUpdate is false when the existing value is identical.
-func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, checkCRL bool) (bool, error) {
-	rendered := RenderRadSecTLS(checkCRL)
+func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, checkCRL, proxyProtocol bool) (bool, error) {
+	rendered := RenderRadSecTLS(checkCRL, proxyProtocol)
 	existing, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
 	if err == nil && string(existing.Data[KeyRadSecTLS]) == rendered {
 		return false, nil
@@ -67,7 +67,7 @@ func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace
 			KeyClientsConf:  []byte(RenderClientsConf(nil)),
 			KeyStatusSecret: []byte(""),
 			KeyStatus:       []byte(""),
-			KeyRadSecTLS:    []byte(RenderRadSecTLS(true)),
+			KeyRadSecTLS:    []byte(RenderRadSecTLS(true, false)),
 		},
 	})
 }

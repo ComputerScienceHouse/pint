@@ -94,7 +94,7 @@ func main() {
 		}
 	}
 
-	tlsUpdated, err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.RadSecCheckCRL)
+	tlsUpdated, err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.RadSecCheckCRL, cfg.RadSecProxyProtocol)
 	if err != nil {
 		log.Fatal("write radsec-tls.conf failed", zap.Error(err))
 	}

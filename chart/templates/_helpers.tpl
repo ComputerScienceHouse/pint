@@ -54,6 +54,10 @@ never collide. Each can be overridden via the corresponding values key.
 {{- .Values.secrets.radSecCert | default (printf "%s-radsec-server-certificates" (include "pint.fullname" .)) }}
 {{- end }}
 
+{{- define "pint.secretName.profileSigningCert" -}}
+{{- .Values.secrets.profileSigningCert | default (printf "%s-profile-signing-cert" (include "pint.fullname" .)) }}
+{{- end }}
+
 {{- define "pint.envSecret" -}}
 {{- .Values.envSecret | default (include "pint.fullname" .) }}
 {{- end }}

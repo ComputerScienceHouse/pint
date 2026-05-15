@@ -291,10 +291,7 @@ helm repo update
 
 ### Credentials Secret
 
-PINT splits config into two Kubernetes objects:
-
-- **ConfigMap**: rendered automatically by the chart from the `config:` values block. Contains all non-sensitive settings (`PINT_IPA_HOST`, `PINT_WIFI_SSID`, etc.).
-- **Secret**: must be created manually before deploying. Contains only the two sensitive credentials:
+All non-sensitive PINT configuration is rendered directly into the Deployment's `env` block from the `config:` values. Sensitive credentials must be provided in a pre-existing Secret:
 
 ```bash
 kubectl create secret generic <release-name> -n pint \
@@ -302,7 +299,7 @@ kubectl create secret generic <release-name> -n pint \
   --from-literal=PINT_IPA_PASSWORD=<ipa-password>
 ```
 
-Set `envSecret` in your values to the name of this Secret. The chart's PINT Deployment mounts both objects as environment variables.
+Set `envSecret` in your values to the name of this Secret. The chart mounts it via `envFrom` on the PINT Deployment.
 
 ---
 
@@ -394,6 +391,7 @@ All configuration is via environment variables. Copy `.env.dev.example` to `.env
 | `PINT_FREERADIUS_DEPLOYMENT` | `pint-freeradius` | FreeRADIUS Deployment name |
 | `PINT_RADIUS_STATUS_PORT` | `18121` | FreeRADIUS status server port |
 | `PINT_RADIUS_RADSEC_CHECK_CRL` | `true` | Enable CRL checking in the RadSec TLS listener |
+| `PINT_RADIUS_RADSEC_PROXY_PROTOCOL` | `false` | Expect HAProxy PROXY protocol header on RadSec connections; set `true` when HAProxy fronts FreeRADIUS |
 | `PINT_IPA_SKIP_TLS_VERIFY` | `false` | Skip FreeIPA TLS verification (dev only) |
 | `PINT_DISABLE_OIDC` | `false` | Bypass OIDC and inject a static dev user |
 | `PINT_DEV_RTP` | `false` | Inject `rtp` group into dev user (requires `PINT_DISABLE_OIDC=true`) |

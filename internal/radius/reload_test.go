@@ -91,7 +91,7 @@ func TestWriteRadSecTLS_WritesAndDetectsChanges(t *testing.T) {
 	ctx := context.Background()
 	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
 
-	updated, err := radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false)
+	updated, err := radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false, false)
 	if err != nil {
 		t.Fatalf("WriteRadSecTLS() error: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestWriteRadSecTLS_WritesAndDetectsChanges(t *testing.T) {
 	}
 
 	// Second write with same value should not report updated.
-	updated, err = radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false)
+	updated, err = radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false, false)
 	if err != nil {
 		t.Fatalf("WriteRadSecTLS() second call error: %v", err)
 	}

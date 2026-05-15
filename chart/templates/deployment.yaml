@@ -25,13 +25,69 @@ spec:
             - containerPort: 8080
               name: http
           envFrom:
-            - configMapRef:
-                name: {{ include "pint.fullname" . }}
             - secretRef:
                 name: {{ include "pint.envSecret" . }}
           env:
-            # Non-sensitive deployment config injected by the chart so it stays
-            # consistent with the Role resourceNames and FreeRADIUS volume mounts.
+            - name: PINT_CLIENT_ID
+              value: {{ .Values.config.clientID | quote }}
+            - name: PINT_SERVER_URL
+              value: {{ .Values.config.serverURL | quote }}
+            - name: PINT_IPA_HOST
+              value: {{ .Values.config.ipaHost | quote }}
+            - name: PINT_IPA_SERVICE_ACCOUNT
+              value: {{ .Values.config.ipaServiceAccount | quote }}
+            - name: PINT_IPA_WIRELESS_CA_NAME
+              value: {{ .Values.config.ipaWirelessCAName | quote }}
+            - name: PINT_IPA_RADSEC_CA_NAME
+              value: {{ .Values.config.ipaRadSecCAName | quote }}
+            - name: PINT_IPA_ROOT_CA_NAME
+              value: {{ .Values.config.ipaRootCAName | quote }}
+            - name: PINT_WIFI_SSID
+              value: {{ .Values.config.wifiSSID | quote }}
+            - name: PINT_RADIUS_SERVER
+              value: {{ .Values.config.radiusServer | quote }}
+            {{- if .Values.config.ipaCertProfile }}
+            - name: PINT_IPA_CERT_PROFILE
+              value: {{ .Values.config.ipaCertProfile | quote }}
+            {{- end }}
+            {{- if .Values.config.ipaRadSecClientCertProfile }}
+            - name: PINT_IPA_RADSEC_CLIENT_CERT_PROFILE
+              value: {{ .Values.config.ipaRadSecClientCertProfile | quote }}
+            {{- end }}
+            {{- if .Values.config.ipaRadSecServerCertProfile }}
+            - name: PINT_IPA_RADSEC_SERVER_CERT_PROFILE
+              value: {{ .Values.config.ipaRadSecServerCertProfile | quote }}
+            {{- end }}
+            {{- if .Values.config.ipaSkipTLSVerify }}
+            - name: PINT_IPA_SKIP_TLS_VERIFY
+              value: "true"
+            {{- end }}
+            {{- if not .Values.config.radSecCheckCRL }}
+            - name: PINT_RADIUS_RADSEC_CHECK_CRL
+              value: "false"
+            {{- end }}
+            {{- if .Values.config.radSecProxyProtocol }}
+            - name: PINT_RADIUS_RADSEC_PROXY_PROTOCOL
+              value: "true"
+            {{- end }}
+            {{- if .Values.config.radSecStatusPort }}
+            - name: PINT_RADIUS_STATUS_PORT
+              value: {{ .Values.config.radSecStatusPort | quote }}
+            {{- end }}
+            {{- if .Values.config.radSecStatusAddr }}
+            - name: PINT_RADIUS_STATUS_ADDR
+              value: {{ .Values.config.radSecStatusAddr | quote }}
+            {{- end }}
+            {{- if .Values.config.codeSigningCAName }}
+            - name: PINT_IPA_CODE_SIGNING_CA_NAME
+              value: {{ .Values.config.codeSigningCAName | quote }}
+            - name: PINT_PROFILE_SIGNING_CERT_SECRET
+              value: {{ include "pint.secretName.profileSigningCert" . | quote }}
+            {{- if .Values.config.codeSigningCertProfile }}
+            - name: PINT_IPA_CODE_SIGNING_CERT_PROFILE
+              value: {{ .Values.config.codeSigningCertProfile | quote }}
+            {{- end }}
+            {{- end }}
             - name: PINT_NAMESPACE
               valueFrom:
                 fieldRef:

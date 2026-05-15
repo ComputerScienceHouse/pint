@@ -8,6 +8,9 @@ metadata:
     {{- include "pint.freeradiusLabels" . | nindent 4 }}
 spec:
   type: {{ .Values.freeradius.service.type }}
+  {{- if and (ne .Values.freeradius.service.type "ClusterIP") .Values.freeradius.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ .Values.freeradius.service.externalTrafficPolicy }}
+  {{- end }}
   selector:
     {{- include "pint.freeradiusSelectorLabels" . | nindent 4 }}
   ports:
