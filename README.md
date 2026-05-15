@@ -1,8 +1,8 @@
-# PINT — Pouring IPA for Network Trust
+# PINT: Pouring IPA for Network Trust
 
-PINT is a self-service WiFi enrollment portal for [Computer Science House](https://csh.rit.edu). Members log in with their CSH Keycloak account, and PINT issues them a certificate from FreeIPA that they use to authenticate to the WiFi network via EAP-TLS — no passwords involved. WiFi controllers (home routers, etc.) can also enroll for a RadSec client certificate to proxy authentication back to FreeRADIUS over a mutual-TLS connection.
+PINT is a self-service WiFi enrollment portal for [Computer Science House](https://csh.rit.edu). Members log in with their CSH Keycloak account and PINT issues them a certificate from FreeIPA. That certificate is used to authenticate to the WiFi network via EAP-TLS, with no passwords involved. WiFi controllers (home routers, etc.) can also enroll for a RadSec client certificate to proxy authentication back to FreeRADIUS over a mutual-TLS connection.
 
-PINT is a single stateless Go binary. There is no database — all persistent state lives in Kubernetes Secrets that FreeRADIUS mounts directly.
+PINT is a single stateless Go binary. There is no database. All persistent state lives in Kubernetes Secrets that FreeRADIUS mounts directly.
 
 ```mermaid
 flowchart TD
@@ -23,7 +23,7 @@ flowchart TD
 
 ### Certificate Generation via FreeIPA
 
-Every certificate PINT issues follows the same path: generate a secp384r1 ECDSA keypair locally, build a CSR, and call FreeIPA's `cert_request` RPC with the appropriate CA and profile. FreeIPA's Dogtag CA signs the cert and returns the DER-encoded result. The private key never leaves PINT — it is either bundled into the download or shown once and discarded.
+Every certificate PINT issues follows the same path: generate a secp384r1 ECDSA keypair locally, build a CSR, and call FreeIPA's `cert_request` RPC with the appropriate CA and profile. FreeIPA's Dogtag CA signs the cert and returns the DER-encoded result. The private key never leaves PINT; it is either bundled into the download or shown once and discarded.
 
 ```mermaid
 sequenceDiagram
@@ -51,7 +51,7 @@ Three custom Dogtag certificate profiles control validity, key usage, and subjec
 | `pint_radsec_client` | mTLS client certs for WiFi controllers | 5 years | `clientAuth` |
 | `pint_radsec_server` | mTLS server cert for the FreeRADIUS RadSec listener | 90 days | `serverAuth` |
 
-Five-year validity on client certs minimises re-enrollment burden. The 90-day server cert is automatically renewed by PINT — see [RadSec Server Cert](#radsec-server-cert).
+Five-year validity on client certs minimises re-enrollment burden. The 90-day server cert is automatically renewed by PINT (see [RadSec Server Cert](#radsec-server-cert)).
 
 Profile config files live in `ipa/profiles/`. They must be imported into FreeIPA once before PINT can use them. Use `ipa/update_profile.py`, which supports three actions:
 
@@ -91,17 +91,17 @@ Members running home routers or other WiFi controllers can enroll for a RadSec c
 **Enrollment:**
 1. Member visits `/radius`, enters their controller's source IP, and clicks Enroll.
 2. PINT generates a secp384r1 keypair and requests a `pint_radsec_client` certificate from FreeIPA.
-3. The private key and certificate PEM are displayed **once** — PINT does not retain them.
+3. The private key and certificate PEM are displayed **once**. PINT does not retain them.
 4. PINT writes an updated `clients.conf` to the Kubernetes config Secret and triggers a FreeRADIUS rollout restart.
 5. The member configures their router with the cert, key, and the RadSec CA chain (downloadable from `/radius/ca`). The RADIUS shared secret is always `radsec` (standard for RFC 6614).
 
-**IP allowlist:** A source IP address is required at enrollment and when updating. Regular members must supply a single bare IP — CIDR ranges are rejected. Requests arriving from any other address are dropped by FreeRADIUS before authentication begins. Only the organisation-level controller (managed via `/admin/radius`) accepts a CIDR range or no restriction.
+**IP allowlist:** A source IP address is required at enrollment and when updating. Regular members must supply a single bare IP; CIDR ranges are rejected. Requests arriving from any other address are dropped by FreeRADIUS before authentication begins. Only the organisation-level controller (managed via `/admin/radius`) accepts a CIDR range or no restriction.
 
 **Lifecycle:** Members can update their IP allowlist, regenerate credentials (revokes and replaces the cert), or delete their enrollment entirely at any time from `/radius`. Admins (RTP group) have the same controls over any member's enrollment via `/admin/radius`, and can provision an organisation-level controller (`root`) that is not tied to any member account.
 
 ### FreeRADIUS Control
 
-PINT manages FreeRADIUS entirely through the Kubernetes API — there is no direct process communication.
+PINT manages FreeRADIUS entirely through the Kubernetes API with no direct process communication.
 
 ```mermaid
 flowchart LR
@@ -112,7 +112,7 @@ flowchart LR
     RS -->|volume mount\n/etc/pint/radsec/| FR
 ```
 
-**`pint-config` Secret** — PINT writes and owns all keys:
+**`pint-config` Secret:** PINT writes and owns all keys.
 
 | Key | Description |
 |---|---|
@@ -120,21 +120,21 @@ flowchart LR
 | `clients.conf` | FreeRADIUS client configuration rendered from `clients.json` |
 | `radsec-tls.conf` | TLS block for the RadSec listener; CRL checking on/off via `PINT_RADIUS_RADSEC_CHECK_CRL` |
 | `status` | Status virtual server client config |
-| `status-secret` | Shared secret for status server queries, rotated on each PINT startup |
+| `status-secret` | Shared secret for status server queries |
 
-**`pint-radsec-server-certificates` Secret** — TLS material for FreeRADIUS:
+**`pint-radsec-server-certificates` Secret:** TLS material for FreeRADIUS.
 
 | Key | Description |
 |---|---|
 | `tls.crt` / `tls.key` | RadSec server certificate and private key |
-| `ca.pem` | RadSec CA chain — verifies controller client certs |
-| `wifi-ca.pem` | WiFi CA cert — verifies EAP-TLS user certs |
+| `ca.pem` | RadSec CA chain used to verify controller client certs |
+| `wifi-ca.pem` | WiFi CA cert used to verify EAP-TLS user certs |
 
 When any config changes, PINT patches the FreeRADIUS Deployment's `kubectl.kubernetes.io/restartedAt` annotation, triggering a rolling restart that picks up the new Secret contents.
 
 #### RadSec Server Cert
 
-At startup, PINT checks whether the RadSec server certificate has more than 30 days of validity remaining. If not — or if the Secret is missing — PINT requests a new `pint_radsec_server` certificate from FreeIPA, writes it to the Secret, and triggers a FreeRADIUS restart. A background goroutine repeats this check every 24 hours, so renewals are fully automatic.
+At startup, PINT checks whether the RadSec server certificate has more than 30 days of validity remaining. If the cert is missing or nearing expiry, PINT requests a new `pint_radsec_server` certificate from FreeIPA, writes it to the Secret, and triggers a FreeRADIUS restart. A background goroutine repeats this check every 24 hours, so renewals are fully automatic.
 
 ---
 
@@ -167,7 +167,7 @@ flowchart TB
     E --> CERT
 ```
 
-**`radsec` virtual server** listens on TCP port 2083. It `$INCLUDE`s `radsec-tls.conf` (the TLS block PINT generates, containing cert paths and CRL settings) and `$-INCLUDE`s `clients.conf` (the enrolled controller list). The `$-INCLUDE` variant is FreeRADIUS syntax for an optional include — the server starts even if the file is absent, which lets FreeRADIUS boot before PINT has written its first config.
+**`radsec` virtual server** listens on TCP port 2083. It `$INCLUDE`s `radsec-tls.conf` (the TLS block PINT generates, containing cert paths and CRL settings) and `$-INCLUDE`s `clients.conf` (the enrolled controller list). The `$-INCLUDE` variant is FreeRADIUS syntax for an optional include; the server starts even if the file is absent, which lets FreeRADIUS boot before PINT has written its first config.
 
 **`status` virtual server** listens on UDP port 18121. It `$-INCLUDE`s the status client config written by PINT, which defines which CIDRs may query the status server and the shared secret required to do so.
 
@@ -199,7 +199,7 @@ Source IP allowlists are enforced in `clients.conf` before any authentication oc
 
 ### EAP Module
 
-EAP-TLS is the only supported authentication method — there is no password fallback. During the EAP exchange, FreeRADIUS validates the user's client certificate against `wifi-ca.pem` (the WiFi intermediate CA). Only certificates issued through PINT's `pint_wifi` profile will pass, since that profile enforces `clientAuth` EKU and the CA is not publicly trusted.
+EAP-TLS is the only supported authentication method with no password fallback. During the EAP exchange, FreeRADIUS validates the user's client certificate against `wifi-ca.pem` (the WiFi intermediate CA). Only certificates issued through PINT's `pint_wifi` profile will pass, since that profile enforces `clientAuth` EKU and the CA is not publicly trusted.
 
 TLS 1.2 is the minimum version. The cipher list is restricted to `ECDHE+AESGCM:DHE+AESGCM` with `secp384r1` as the negotiated ECDH curve, matching the EC keys in all PINT-issued certificates.
 
@@ -218,7 +218,7 @@ The chart in `chart/` deploys both PINT and FreeRADIUS into a single namespace a
 Key values:
 
 ```yaml
-# Container images — default tags come from Chart.appVersion
+# Container images; default tags come from Chart.appVersion
 pint:
   image:
     repository: pint
@@ -262,8 +262,8 @@ pint:
 
 The chart is published to GitHub Pages via `helm/chart-releaser-action` on every push to `main` or `dev` that touches `chart/**`.
 
-- **`main`** — releases the version declared in `chart/Chart.yaml` as a stable release.
-- **`dev`** — stamps the version as `<version>-dev.<run_number>` (e.g. `0.1.0-dev.42`) and publishes a pre-release. Useful for testing chart changes before merging.
+- **`main`**: releases the version declared in `chart/Chart.yaml` as a stable release.
+- **`dev`**: stamps the version as `<version>-dev.<run_number>` (e.g. `0.1.0-dev.42`) and publishes a pre-release. Useful for testing chart changes before merging.
 
 To add the Helm repository:
 
@@ -276,8 +276,8 @@ helm repo update
 
 PINT splits config into two Kubernetes objects:
 
-- **ConfigMap** — rendered automatically by the chart from the `config:` values block. Contains all non-sensitive settings (`PINT_IPA_HOST`, `PINT_WIFI_SSID`, etc.).
-- **Secret** — must be created manually before deploying. Contains only the two sensitive credentials:
+- **ConfigMap**: rendered automatically by the chart from the `config:` values block. Contains all non-sensitive settings (`PINT_IPA_HOST`, `PINT_WIFI_SSID`, etc.).
+- **Secret**: must be created manually before deploying. Contains only the two sensitive credentials:
 
 ```bash
 kubectl create secret generic <release-name> -n pint \
@@ -307,7 +307,7 @@ Set `envSecret` in your values to the name of this Secret. The chart's PINT Depl
 ```bash
 # One-time: create the kind cluster, install the Helm chart,
 # build the FreeRADIUS image, and install metrics-server.
-# Safe to re-run — skips steps already complete.
+# Safe to re-run; skips steps already complete.
 make dev-setup
 
 # Copy and edit the dev env file.
@@ -320,8 +320,8 @@ make dev
 
 `make dev` starts two processes via `overmind` and the `Procfile`:
 
-- **`ipa-stub`** — FreeIPA stub server on `:8088` (see [FreeIPA Stub](#freeipa-stub) below).
-- **`pint`** — the PINT server on `:8080`. It waits for the stub to be ready before starting.
+- **`ipa-stub`**: FreeIPA stub server on `:8088` (see [FreeIPA Stub](#freeipa-stub) below).
+- **`pint`**: the PINT server on `:8080`. It waits for the stub to be ready before starting.
 
 FreeRADIUS runs in the kind cluster and persists between `make dev` sessions. PINT talks to it via the Kubernetes API using your local `~/.kube/config`.
 
@@ -380,7 +380,7 @@ All configuration is via environment variables. Copy `.env.dev.example` to `.env
 
 ### FreeIPA Stub
 
-The stub (`dev/freeipa-stub/`) is a minimal HTTPS server that implements just enough of the FreeIPA JSON-RPC API for PINT to function locally. It runs on `:8088` with a self-signed TLS certificate — set `PINT_IPA_SKIP_TLS_VERIFY=true` in `.env.dev` so PINT accepts it.
+The stub (`dev/freeipa-stub/`) is a minimal HTTPS server that implements just enough of the FreeIPA JSON-RPC API for PINT to function locally. It runs on `:8088` with a self-signed TLS certificate, so `PINT_IPA_SKIP_TLS_VERIFY=true` must be set in `.env.dev`.
 
 **CA structure**
 
@@ -388,11 +388,11 @@ On first run the stub generates a three-tier CA hierarchy and persists it to `de
 
 ```
 Root CA (ipa)
-├── WiFi CA  (wireless)   — signs pint_wifi and pint_radsec_server certs
-└── RadSec CA (radsec)    — signs pint_radsec_client certs
+├── WiFi CA  (wireless)   # signs pint_wifi and pint_radsec_server certs
+└── RadSec CA (radsec)    # signs pint_radsec_client certs
 ```
 
-The CA names are read from `PINT_IPA_WIRELESS_CA_NAME`, `PINT_IPA_RADSEC_CA_NAME`, and `PINT_IPA_ROOT_CA_NAME` at startup — they must match the values in `.env.dev`. On subsequent runs the persisted keys and certificates are reloaded, so issued certificates remain valid across restarts.
+The CA names are read from `PINT_IPA_WIRELESS_CA_NAME`, `PINT_IPA_RADSEC_CA_NAME`, and `PINT_IPA_ROOT_CA_NAME` at startup and must match the values in `.env.dev`. On subsequent runs the persisted keys and certificates are reloaded, so issued certificates remain valid across restarts.
 
 **Implemented RPC methods**
 
@@ -400,13 +400,13 @@ The CA names are read from `PINT_IPA_WIRELESS_CA_NAME`, `PINT_IPA_RADSEC_CA_NAME
 |---|---|
 | `ca_show` | Returns the DER-encoded certificate for the named CA |
 | `cert_request` | Signs the CSR with the requested CA; applies profile-appropriate EKU and validity (see below) |
-| `cert_revoke` | No-op — always returns success |
+| `cert_revoke` | No-op; always returns success |
 
 Authentication (`/ipa/session/login_password`) accepts any credentials and returns a stub session cookie.
 
 **Profile handling**
 
-The stub is aware of one specific profile ID: `pint_radsec_server`. Certificates issued with that profile receive `serverAuth` EKU, 90-day validity, and a DNS SAN set to the CSR's CN (required for Go's TLS verification of server certificates). All other profile IDs — including `pint_wifi` and `pint_radsec_client` — receive `clientAuth` EKU and 5-year validity.
+The stub is aware of one specific profile ID: `pint_radsec_server`. Certificates issued with that profile receive `serverAuth` EKU, 90-day validity, and a DNS SAN set to the CSR's CN (required for Go's TLS verification of server certificates). All other profile IDs, including `pint_wifi` and `pint_radsec_client`, receive `clientAuth` EKU and 5-year validity.
 
 Unlike real FreeIPA/Dogtag, the stub does not enforce subject name patterns or key type constraints defined in the profile config files.
 
