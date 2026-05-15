@@ -14,7 +14,7 @@ rules:
     resourceNames:
       - {{ include "pint.secretName.config" . | quote }}
       - {{ include "pint.secretName.radSecCert" . | quote }}
-    verbs: ["get", "patch"]
+    verbs: ["get", "patch", "update"]
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["list"]
