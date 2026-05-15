@@ -67,8 +67,8 @@ freeradius:
     tag: ""  # defaults to Chart.appVersion
     pullPolicy: IfNotPresent
   service:
-    type: LoadBalancer
-    nodePort: null  # only used when type=NodePort
+    type: NodePort
+    nodePort: null
   # FreeRADIUS status virtual server — used by PINT to surface per-pod auth statistics.
   # Managed automatically by PINT at startup.
   statusServer:
