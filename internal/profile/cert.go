@@ -11,31 +11,19 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"net"
 
 	"software.sslmate.com/src/go-pkcs12"
 )
 
 // GenerateKeyAndCSR creates a secp384r1 ECDSA private key and a PEM-encoded CSR with the given CN.
 func GenerateKeyAndCSR(commonName string) (*ecdsa.PrivateKey, []byte, error) {
-	return generateCSR(commonName, nil)
-}
-
-// GenerateServerKeyAndCSR creates a secp384r1 ECDSA private key and a PEM-encoded CSR with the
-// given CN and optional IP SANs. Use this for server certs where clients connect by IP.
-func GenerateServerKeyAndCSR(commonName string, ipSANs []net.IP) (*ecdsa.PrivateKey, []byte, error) {
-	return generateCSR(commonName, ipSANs)
-}
-
-func generateCSR(commonName string, ipSANs []net.IP) (*ecdsa.PrivateKey, []byte, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate key: %w", err)
 	}
 
 	template := &x509.CertificateRequest{
-		Subject:     pkix.Name{CommonName: commonName},
-		IPAddresses: ipSANs,
+		Subject: pkix.Name{CommonName: commonName},
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)
 	if err != nil {

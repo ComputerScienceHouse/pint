@@ -7,7 +7,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -228,7 +227,7 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 	}
 
 	// Generate new cert via FreeIPA
-	privKey, csrPEM, genErr := profile.GenerateServerKeyAndCSR(cfg.IPAServiceHostname, radiusServerIPs(cfg.RadiusServer))
+	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
 	if genErr != nil {
 		return nil, nil, false, fmt.Errorf("generate radsec key/csr: %w", genErr)
 	}
@@ -250,19 +249,6 @@ func loadOrRenewRadSecServerCert(ctx context.Context, k8sClient kubernetes.Inter
 	}
 	log.Printf("issued and stored new RadSec server cert")
 	return newCertPEM, newKeyPEM, true, nil
-}
-
-// radiusServerIPs parses the IP from an "host:port" RADIUS server address.
-// Returns nil if the host portion is a hostname rather than an IP.
-func radiusServerIPs(addr string) []net.IP {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
-	}
-	if ip := net.ParseIP(host); ip != nil {
-		return []net.IP{ip}
-	}
-	return nil
 }
 
 // watchRadSecServerCert runs forever, checking every 24 hours whether the RadSec server
