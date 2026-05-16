@@ -78,7 +78,6 @@ spec:
             - name: PINT_RADIUS_STATUS_ADDR
               value: {{ .Values.config.radSecStatusAddr | quote }}
             {{- end }}
-            {{- if .Values.config.codeSigningCAName }}
             - name: PINT_IPA_CODE_SIGNING_CA_NAME
               value: {{ .Values.config.codeSigningCAName | quote }}
             - name: PINT_PROFILE_SIGNING_CERT_SECRET
@@ -86,7 +85,6 @@ spec:
             {{- if .Values.config.codeSigningCertProfile }}
             - name: PINT_IPA_CODE_SIGNING_CERT_PROFILE
               value: {{ .Values.config.codeSigningCertProfile | quote }}
-            {{- end }}
             {{- end }}
             - name: PINT_NAMESPACE
               valueFrom:

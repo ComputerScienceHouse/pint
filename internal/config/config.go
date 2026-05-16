@@ -44,7 +44,7 @@ type Config struct {
 	RadSecProxyProtocol bool  // PINT_RADIUS_RADSEC_PROXY_PROTOCOL: expect HAProxy PROXY protocol header on RadSec connections (default false)
 
 
-	// Apple profile signing (optional — enabled when CodeSigningCAName is set)
+	// Apple profile signing
 	CodeSigningCAName        string // PINT_IPA_CODE_SIGNING_CA_NAME: FreeIPA intermediate CA for profile signing certs
 	CodeSigningCertProfile   string // PINT_IPA_CODE_SIGNING_CERT_PROFILE: FreeIPA profile for profile signing certs (default: pint_profile_signing)
 	ProfileSigningCertSecret string // PINT_PROFILE_SIGNING_CERT_SECRET: K8s Secret storing the profile signing cert+key
@@ -113,7 +113,7 @@ func Load() (*Config, error) {
 	cfg.IPACertProfile = optional("PINT_IPA_CERT_PROFILE", "pint_wifi")
 	cfg.RadSecClientCertProfile = optional("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE", "pint_radsec_client")
 	cfg.RadSecServerCertProfile = optional("PINT_IPA_RADSEC_SERVER_CERT_PROFILE", "pint_radsec_server")
-	cfg.CodeSigningCAName = os.Getenv("PINT_IPA_CODE_SIGNING_CA_NAME")
+	cfg.CodeSigningCAName = require("PINT_IPA_CODE_SIGNING_CA_NAME")
 	cfg.CodeSigningCertProfile = optional("PINT_IPA_CODE_SIGNING_CERT_PROFILE", "pint_profile_signing")
 	cfg.ProfileSigningCertSecret = optional("PINT_PROFILE_SIGNING_CERT_SECRET", "pint-profile-signing-cert")
 	cfg.SCEPRACertSecret = optional("PINT_SCEP_RA_CERT_SECRET", "pint-scep-ra-cert")

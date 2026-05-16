@@ -43,7 +43,7 @@ func main() {
 	wifiCAName := flag.String("wifi-ca", getEnv("PINT_IPA_WIRELESS_CA_NAME", "wireless"), "FreeIPA CA name for WiFi certs (PINT_IPA_WIRELESS_CA_NAME)")
 	radSecCAName := flag.String("radsec-ca", getEnv("PINT_IPA_RADSEC_CA_NAME", "radsec"), "FreeIPA CA name for RadSec certs (PINT_IPA_RADSEC_CA_NAME)")
 	rootCAName := flag.String("root-ca", getEnv("PINT_IPA_ROOT_CA_NAME", "ipa"), "FreeIPA root CA name (PINT_IPA_ROOT_CA_NAME)")
-	codeSigningCAName := flag.String("code-signing-ca", getEnv("PINT_IPA_CODE_SIGNING_CA_NAME", ""), "FreeIPA CA name for profile signing certs; leave empty to disable (PINT_IPA_CODE_SIGNING_CA_NAME)")
+	codeSigningCAName := flag.String("code-signing-ca", getEnv("PINT_IPA_CODE_SIGNING_CA_NAME", "code_signing"), "FreeIPA CA name for profile signing certs (PINT_IPA_CODE_SIGNING_CA_NAME)")
 	flag.Parse()
 
 	serialCounter.Store(time.Now().UnixNano())
@@ -81,7 +81,6 @@ func main() {
 // loadOrInitCAs loads persisted CA state from dir, or generates a fresh root +
 // intermediates and persists them. The CA names are the FreeIPA names PINT will
 // use and must match the corresponding env vars in .env.dev.
-// codeSigningCAName is optional: pass an empty string to skip that CA.
 func loadOrInitCAs(dir, wifiCAName, radSecCAName, rootCAName, codeSigningCAName string) (map[string]*caEntry, error) {
 	root, err := loadOrCreateCA(dir, "root", "PINT Dev Root CA", nil)
 	if err != nil {
@@ -95,23 +94,19 @@ func loadOrInitCAs(dir, wifiCAName, radSecCAName, rootCAName, codeSigningCAName 
 	if err != nil {
 		return nil, fmt.Errorf("radsec CA: %w", err)
 	}
+	codeSigning, err := loadOrCreateCA(dir, "code_signing", "PINT Dev Code Signing CA", root)
+	if err != nil {
+		return nil, fmt.Errorf("code signing CA: %w", err)
+	}
 
 	store := map[string]*caEntry{
-		wifiCAName:   wifi,
-		radSecCAName: radsec,
-		rootCAName:   root,
+		wifiCAName:        wifi,
+		radSecCAName:      radsec,
+		rootCAName:        root,
+		codeSigningCAName: codeSigning,
 	}
 
-	if codeSigningCAName != "" {
-		codeSigning, err := loadOrCreateCA(dir, "code_signing", "PINT Dev Code Signing CA", root)
-		if err != nil {
-			return nil, fmt.Errorf("code signing CA: %w", err)
-		}
-		store[codeSigningCAName] = codeSigning
-		log.Printf("CA names: wifi=%q radsec=%q root=%q code_signing=%q", wifiCAName, radSecCAName, rootCAName, codeSigningCAName)
-	} else {
-		log.Printf("CA names: wifi=%q radsec=%q root=%q (code_signing disabled)", wifiCAName, radSecCAName, rootCAName)
-	}
+	log.Printf("CA names: wifi=%q radsec=%q root=%q code_signing=%q", wifiCAName, radSecCAName, rootCAName, codeSigningCAName)
 
 	return store, nil
 }

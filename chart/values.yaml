@@ -38,8 +38,8 @@ config:
   radSecStatusPort: ""          # overrides the FreeRADIUS status server port (default: 18121)
   radSecStatusAddr: ""          # overrides the status server address (host:port); useful in dev when pod IPs are unreachable
 
-  # iOS mobileconfig signing (optional — leave codeSigningCAName empty to disable)
-  codeSigningCAName: ""
+  # iOS mobileconfig signing
+  codeSigningCAName: "code_signing"
   codeSigningCertProfile: ""    # default: pint_profile_signing
 
   # WiFi
@@ -64,7 +64,7 @@ envSecret: ""
 secrets:
   config:              ""  # default: <fullname>-config  (clients.json, clients.conf, status-secret, status)
   radSecCert:          ""  # default: <fullname>-radsec-server-certificates  (tls.crt, tls.key, ca.pem, wifi-ca.pem)
-  profileSigningCert:  ""  # default: <fullname>-profile-signing-cert  (tls.crt, tls.key); only created when codeSigningCAName is set
+  profileSigningCert:  ""  # default: <fullname>-profile-signing-cert  (tls.crt, tls.key)
   scepRACert:          ""  # default: <fullname>-scep-ra-cert  (tls.crt, tls.key); auto-generated on first startup
 
 service:

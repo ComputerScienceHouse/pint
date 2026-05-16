@@ -101,7 +101,7 @@
         },
         "codeSigningCAName": {
           "type": "string",
-          "description": "FreeIPA CA name for the iOS mobileconfig code signing certificate. Leave empty to disable profile signing."
+          "description": "FreeIPA CA name for the iOS mobileconfig code signing certificate."
         },
         "codeSigningCertProfile": {
           "type": "string",
@@ -118,7 +118,7 @@
           "description": "RadSec server address shown to users (e.g. radius.csh.rit.edu:2083)."
         }
       },
-      "required": ["clientID", "serverURL", "ipaHost", "ipaServiceAccount", "ipaWirelessCAName", "ipaRadSecCAName", "wifiSSID", "radiusServer"]
+      "required": ["clientID", "serverURL", "ipaHost", "ipaServiceAccount", "ipaWirelessCAName", "ipaRadSecCAName", "codeSigningCAName", "wifiSSID", "radiusServer"]
     },
     "secrets": {
       "type": "object",
@@ -134,7 +134,7 @@
         },
         "profileSigningCert": {
           "type": "string",
-          "description": "Secret storing the iOS mobileconfig signing certificate and key. Defaults to '<fullname>-profile-signing-cert'. Only created when codeSigningCAName is set."
+          "description": "Secret storing the iOS mobileconfig signing certificate and key. Defaults to '<fullname>-profile-signing-cert'."
         }
       }
     },

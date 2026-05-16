@@ -15,9 +15,7 @@ rules:
       - {{ include "pint.secretName.config" . | quote }}
       - {{ include "pint.secretName.radSecCert" . | quote }}
       - {{ include "pint.secretName.scepRACert" . | quote }}
-      {{- if .Values.config.codeSigningCAName }}
       - {{ include "pint.secretName.profileSigningCert" . | quote }}
-      {{- end }}
     verbs: ["get", "patch", "update"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
