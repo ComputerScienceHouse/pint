@@ -49,6 +49,10 @@ type Config struct {
 	CodeSigningCertProfile   string // PINT_IPA_CODE_SIGNING_CERT_PROFILE: FreeIPA profile for profile signing certs (default: pint_profile_signing)
 	ProfileSigningCertSecret string // PINT_PROFILE_SIGNING_CERT_SECRET: K8s Secret storing the profile signing cert+key
 
+	// SCEP
+	SCEPURL          string // derived: ServerURL + /scep
+	SCEPRACertSecret string // PINT_SCEP_RA_CERT_SECRET: K8s Secret storing the self-signed SCEP RA cert+key (default: pint-scep-ra-cert)
+
 	// UI
 	RadiusServer string
 
@@ -112,8 +116,10 @@ func Load() (*Config, error) {
 	cfg.CodeSigningCAName = os.Getenv("PINT_IPA_CODE_SIGNING_CA_NAME")
 	cfg.CodeSigningCertProfile = optional("PINT_IPA_CODE_SIGNING_CERT_PROFILE", "pint_profile_signing")
 	cfg.ProfileSigningCertSecret = optional("PINT_PROFILE_SIGNING_CERT_SECRET", "pint-profile-signing-cert")
+	cfg.SCEPRACertSecret = optional("PINT_SCEP_RA_CERT_SECRET", "pint-scep-ra-cert")
 
 	cfg.LoginURL = cfg.ServerURL + "/auth/login"
+	cfg.SCEPURL = cfg.ServerURL + "/scep"
 	cfg.CallbackURL = cfg.ServerURL + "/auth/callback"
 	cfg.IPAPrincipal = principalFromDN(cfg.IPAServiceAccount)
 	cfg.IPAServiceHostname = hostnameFromPrincipal(cfg.IPAPrincipal)

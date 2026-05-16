@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/logger"
 	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
+	internscep "github.com/ComputerScienceHouse/pint/internal/scep"
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -164,6 +166,15 @@ func main() {
 	// Background watcher: renew cert before expiry and reload FreeRADIUS
 	go watchRadSecServerCert(log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
 
+	// Load or generate the SCEP RA cert (self-signed RSA, stored in K8s secret).
+	scepRACert, scepRAKey, scepRACertDER, err := loadOrGenerateSCEPRACert(context.Background(), log, k8sClient, cfg)
+	if err != nil {
+		log.Fatal("scep RA cert init failed", zap.Error(err))
+	}
+	log.Info("scep RA cert loaded", zap.String("subject", scepRACert.Subject.CommonName), zap.String("expires", scepRACert.NotAfter.Format("2006-01-02")))
+
+	challengeStore := internscep.NewChallengeStore()
+
 	// Load or request the profile signing cert when code signing is configured.
 	var appleSigner *profile.Signer
 	if cfg.CodeSigningCAName != "" {
@@ -214,6 +225,13 @@ func main() {
 		r.GET("/auth/logout", auth.HandleLogout)
 	}
 
+	// SCEP public routes — iOS calls these without a session cookie.
+	scepHandler, err := internscep.NewHandler(log, challengeStore, ipaClient, cfg.IPAWirelessCAName, cfg.IPACertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
+	if err != nil {
+		log.Fatal("scep handler init failed", zap.Error(err))
+	}
+	scepHandler.Register(r)
+
 	// Public routes
 	r.GET("/", handlers.IndexHandler(cfg.LoginURL))
 
@@ -225,7 +243,7 @@ func main() {
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
-		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, appleSigner))
+		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER, challengeStore, appleSigner))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/secret", handlers.SaveSecretHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
@@ -386,7 +404,7 @@ func loadOrRenewProfileSigningCert(ctx context.Context, log *zap.Logger, k8sClie
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
 	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
 	if err != nil {
-		return nil, false, fmt.Errorf("marshal profile signing key: %w", err)
+		return nil, false, fmt.Errorf("marshal profile signing ec key: %w", err)
 	}
 	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
@@ -426,6 +444,40 @@ func profileSignerFromPEM(cert *x509.Certificate, keyPEM, codeSigningCACertDER [
 		s.Intermediates = []*x509.Certificate{codeSigningCA}
 	}
 	return s, nil
+}
+
+// loadOrGenerateSCEPRACert loads the self-signed SCEP RA cert from the K8s Secret,
+// generating a new one if absent. Returns the parsed cert, key, and raw DER bytes.
+func loadOrGenerateSCEPRACert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, cfg *config.Config) (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
+	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.SCEPRACertSecret, metav1.GetOptions{})
+	if err == nil {
+		certPEM := secret.Data["tls.crt"]
+		keyPEM := secret.Data["tls.key"]
+		if len(certPEM) > 0 && len(keyPEM) > 0 {
+			cert, key, parseErr := internscep.ParseRACert(certPEM, keyPEM)
+			if parseErr == nil {
+				log.Info("reusing existing SCEP RA cert", zap.String("expires", cert.NotAfter.Format("2006-01-02")))
+				return cert, key, cert.Raw, nil
+			}
+		}
+	}
+
+	cert, key, certPEM, keyPEM, genErr := internscep.GenerateRACert()
+	if genErr != nil {
+		return nil, nil, nil, fmt.Errorf("generate SCEP RA cert: %w", genErr)
+	}
+
+	raSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: cfg.SCEPRACertSecret, Namespace: cfg.Namespace},
+		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
+	}
+	if _, createErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Create(ctx, raSecret, metav1.CreateOptions{}); createErr != nil {
+		if _, updateErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Update(ctx, raSecret, metav1.UpdateOptions{}); updateErr != nil {
+			return nil, nil, nil, fmt.Errorf("store SCEP RA cert: %w", updateErr)
+		}
+	}
+	log.Info("generated new SCEP RA cert")
+	return cert, key, cert.Raw, nil
 }
 
 // watchProfileSigningCert runs forever, checking daily whether the profile signing cert

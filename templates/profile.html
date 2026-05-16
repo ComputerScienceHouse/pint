@@ -56,6 +56,49 @@
   margin-top: .375rem;
 }
 
+.profile-explainer {
+  margin-top: 1.25rem;
+  border-top: 1px solid var(--pint-border);
+  padding-top: .875rem;
+}
+
+.profile-explainer summary {
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--pint-muted-strong);
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  user-select: none;
+}
+
+.profile-explainer summary::-webkit-details-marker { display: none; }
+
+.profile-explainer summary .mdi-chevron-right {
+  transition: transform .2s ease;
+}
+
+.profile-explainer[open] summary .mdi-chevron-right {
+  transform: rotate(90deg);
+}
+
+.profile-explainer-body {
+  margin-top: .875rem;
+  font-size: .825rem;
+  color: var(--pint-muted);
+  line-height: 1.6;
+}
+
+.profile-explainer-body p { margin-bottom: .625rem; }
+.profile-explainer-body ul, .profile-explainer-body ol {
+  padding-left: 1.25rem;
+  margin-bottom: .625rem;
+}
+.profile-explainer-body li + li { margin-top: .35rem; }
+.profile-explainer-body strong { color: var(--pint-text); }
+
 .profile-config-label {
   font-size: .8rem;
   font-weight: 600;
@@ -87,7 +130,6 @@
 </style>
 
 <h1 class="page-title">Your WiFi Profile</h1>
-<p class="text-muted mb-4" style="font-size:.9rem; margin-top: -.75rem;">Certificates are generated fresh on each download and are valid for 5 years.</p>
 
 <div class="profile-section profile-ios">
   <div class="profile-section-head">
@@ -97,13 +139,34 @@
     <p class="profile-desc">Opens directly in Settings. Tap install to connect automatically.</p>
     <div class="d-flex align-items-center gap-3 flex-wrap">
       <button class="btn btn-primary" onclick="downloadProfile('ios')" id="btn-ios">
-        <span class="mdi mdi-download me-1"></span> Download .mobileconfig
+        <span class="mdi mdi-download me-1"></span> Download Profile
       </button>
       <span id="spinner-ios" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
     </div>
     <div id="error-ios" class="text-danger small mt-2" style="display:none;"></div>
+
+    <details class="profile-explainer">
+      <summary>
+        <span class="mdi mdi-chevron-right"></span>
+        <span class="mdi mdi-information-outline"></span>
+        What's included and why?
+      </summary>
+      <div class="profile-explainer-body">
+        <p><strong>Your certificate renews automatically.</strong> This profile uses SCEP (Simple Certificate Enrollment Protocol), so your device can request a fresh certificate on its own before the current one expires. You install this once and never think about it again.</p>
+        <p><strong>Your private key never leaves your device.</strong> The certificate is generated on-device and signed directly by CSH's certificate authority, so the server never has access to your credentials.</p>
+        <p><strong>Three CA certificates are bundled in this profile:</strong></p>
+        <ul>
+          <li><strong>CSH Root CA</strong> &mdash; the root of trust for the entire CSH certificate infrastructure.</li>
+          <li><strong>CSH Wireless CA</strong> &mdash; lets your device confirm it's connecting to a real CSH access point, not an impostor.</li>
+          <li><strong>CSH Code Signing CA</strong> &mdash; verifies this profile itself was issued by CSH and hasn't been tampered with.</li>
+        </ul>
+      </div>
+    </details>
   </div>
 </div>
+
+<h2 class="mt-4 mb-1" style="font-size:1.1rem; font-weight:700; color:var(--pint-text);">Manual Configuration</h2>
+<p class="text-muted mb-3" style="font-size:.875rem;">Certificates are generated fresh on each download and are valid for 1 year.</p>
 
 <div class="profile-section profile-android">
   <div class="profile-section-head">

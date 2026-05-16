@@ -58,6 +58,10 @@ never collide. Each can be overridden via the corresponding values key.
 {{- .Values.secrets.profileSigningCert | default (printf "%s-profile-signing-cert" (include "pint.fullname" .)) }}
 {{- end }}
 
+{{- define "pint.secretName.scepRACert" -}}
+{{- .Values.secrets.scepRACert | default (printf "%s-scep-ra-cert" (include "pint.fullname" .)) }}
+{{- end }}
+
 {{- define "pint.envSecret" -}}
 {{- .Values.envSecret | default (include "pint.fullname" .) }}
 {{- end }}

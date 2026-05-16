@@ -31,7 +31,7 @@ func New() (*zap.Logger, error) {
 	var cfg zap.Config
 	if dev {
 		cfg = zap.NewDevelopmentConfig()
-		cfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("15:04:05.000")
+		cfg.EncoderConfig.EncodeTime = zapcore.TimeEncoderOfLayout("2006/01/02 15:04:05.000")
 		cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		cfg.EncoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 	} else {

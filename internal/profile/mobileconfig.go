@@ -2,6 +2,7 @@
 package profile
 
 import (
+	"crypto/sha1" //nolint:gosec
 	"fmt"
 
 	"github.com/google/uuid"
@@ -12,22 +13,48 @@ import (
 type MobileconfigParams struct {
 	SSID                 string
 	RadiusHost           string // hostname only, no port
-	PKCS12Bytes          []byte
-	PKCS12Password       string
-	CACertDER            []byte // wireless intermediate CA
+	CACertDER            []byte // wireless intermediate CA — anchors EAP-TLS server verification
 	RootCACertDER        []byte // root CA — always embed for full chain trust
 	CodeSigningCACertDER []byte // code-signing intermediate CA — embed when profile signing is enabled
 	Username             string
+
+	// SCEP enrollment fields
+	SCEPURL       string // full URL of the SCEP endpoint, e.g. https://pint.csh.rit.edu/scep
+	SCEPChallenge string // one-time challenge password from the ChallengeStore
+	SCEPRACertDER []byte // RA cert — SHA-1 fingerprint embedded as CAFingerprint for iOS verification
 }
 
-// BuildMobileconfig returns a plist-encoded Apple Configuration Profile
-// containing a WiFi (EAP-TLS), PKCS#12 identity, and CA certificate payloads.
+// BuildMobileconfig returns a plist-encoded Apple Configuration Profile containing
+// a WiFi (EAP-TLS) payload and a SCEP payload for on-device key generation and enrollment.
 func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 	caUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.ca."+p.Username)).String()
 	rootCAUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.rootca."+p.Username)).String()
-	clientUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.client."+p.Username)).String()
+	scepUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.scep."+p.Username)).String()
 	profileUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.profile."+p.Username)).String()
 	wifiUUID := uuid.NewSHA1(uuid.NameSpaceDNS, []byte("com.csh.pint.wifi."+p.Username)).String()
+
+	//nolint:gosec
+	raFingerprint := sha1.Sum(p.SCEPRACertDER)
+
+	scepContent := map[string]interface{}{
+		"URL":           p.SCEPURL,
+		"Name":          "CSH WiFi",
+		"Subject":       [][][]string{{{"CN", p.Username}}},
+		"Challenge":     p.SCEPChallenge,
+		"KeyType":       "RSA",
+		"KeySize":       2048,
+		"KeyUsage":      1, // digitalSignature
+		"CAFingerprint": raFingerprint[:],
+	}
+
+	scepPayload := map[string]interface{}{
+		"PayloadType":        "com.apple.security.scep",
+		"PayloadUUID":        scepUUID,
+		"PayloadIdentifier":  fmt.Sprintf("com.csh.pint.scep.%s", p.Username),
+		"PayloadVersion":     1,
+		"PayloadDisplayName": "CSH WiFi Client Certificate",
+		"PayloadContent":     scepContent,
+	}
 
 	wifiPayload := map[string]interface{}{
 		"PayloadType":        "com.apple.wifi.managed",
@@ -42,17 +69,7 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 			"PayloadCertificateAnchorUUID": []string{caUUID},
 			"TLSTrustedServerNames":        []string{p.RadiusHost},
 		},
-		"PayloadCertificateUUID": clientUUID,
-	}
-
-	pkcs12Payload := map[string]interface{}{
-		"PayloadType":        "com.apple.security.pkcs12",
-		"PayloadUUID":        clientUUID,
-		"PayloadIdentifier":  fmt.Sprintf("com.csh.pint.pkcs12.%s", p.Username),
-		"PayloadVersion":     1,
-		"PayloadDisplayName": "CSH WiFi Client Certificate",
-		"PayloadContent":     p.PKCS12Bytes,
-		"Password":           p.PKCS12Password,
+		"PayloadCertificateUUID": scepUUID,
 	}
 
 	// Wireless intermediate CA — anchors EAP-TLS server verification.
@@ -75,7 +92,7 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 		"PayloadContent":     p.RootCACertDER,
 	}
 
-	payloads := []interface{}{wifiPayload, pkcs12Payload, caPayload, rootCAPayload}
+	payloads := []interface{}{scepPayload, wifiPayload, caPayload, rootCAPayload}
 
 	// Code-signing CA — embed when profile signing is enabled so the signing chain
 	// is trusted after the profile is installed.

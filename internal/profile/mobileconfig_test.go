@@ -5,29 +5,53 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ComputerScienceHouse/pint/internal/profile"
 )
+
+// stubRACertDER generates a minimal self-signed RSA cert for use as a fake SCEP RA cert in tests.
+func stubRACertDER(t *testing.T) []byte {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "Test SCEP RA"},
+		NotBefore:    time.Now().Add(-time.Minute),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return der
+}
 
 func TestBuildMobileconfig_ContainsSSID(t *testing.T) {
 	key, _, err := profile.GenerateKeyAndCSR("mbillow")
 	if err != nil {
 		t.Fatal(err)
 	}
-	certDER, caDER := StubCertAndCA(t, key)
-	p12, err := profile.BuildPKCS12(key, certDER, caDER, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, caDER := StubCertAndCA(t, key)
+	raDER := stubRACertDER(t)
 
 	params := profile.MobileconfigParams{
-		SSID:        "TestSSID",
-		RadiusHost:  "radius.example.com",
-		PKCS12Bytes: p12,
-		CACertDER:   caDER,
-		Username:    "mbillow",
+		SSID:          "TestSSID",
+		RadiusHost:    "radius.example.com",
+		CACertDER:     caDER,
+		Username:      "mbillow",
+		SCEPURL:       "https://pint.example.com/scep",
+		SCEPChallenge: "testchallenge",
+		SCEPRACertDER: raDER,
 	}
 
 	data, err := profile.BuildMobileconfig(params)
@@ -50,18 +74,17 @@ func TestBuildMobileconfig_ContainsPayloadTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	certDER, caDER := StubCertAndCA(t, key)
-	p12, err := profile.BuildPKCS12(key, certDER, caDER, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, caDER := StubCertAndCA(t, key)
+	raDER := stubRACertDER(t)
 
 	params := profile.MobileconfigParams{
-		SSID:        "CSH",
-		RadiusHost:  "radius.csh.rit.edu",
-		PKCS12Bytes: p12,
-		CACertDER:   caDER,
-		Username:    "mbillow",
+		SSID:          "CSH",
+		RadiusHost:    "radius.csh.rit.edu",
+		CACertDER:     caDER,
+		Username:      "mbillow",
+		SCEPURL:       "https://pint.csh.rit.edu/scep",
+		SCEPChallenge: "abc123",
+		SCEPRACertDER: raDER,
 	}
 
 	data, err := profile.BuildMobileconfig(params)
@@ -71,7 +94,7 @@ func TestBuildMobileconfig_ContainsPayloadTypes(t *testing.T) {
 	s := string(data)
 	for _, want := range []string{
 		"com.apple.wifi.managed",
-		"com.apple.security.pkcs12",
+		"com.apple.security.scep",
 		"com.apple.security.root",
 	} {
 		if !strings.Contains(s, want) {

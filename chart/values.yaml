@@ -65,6 +65,7 @@ secrets:
   config:              ""  # default: <fullname>-config  (clients.json, clients.conf, status-secret, status)
   radSecCert:          ""  # default: <fullname>-radsec-server-certificates  (tls.crt, tls.key, ca.pem, wifi-ca.pem)
   profileSigningCert:  ""  # default: <fullname>-profile-signing-cert  (tls.crt, tls.key); only created when codeSigningCAName is set
+  scepRACert:          ""  # default: <fullname>-scep-ra-cert  (tls.crt, tls.key); auto-generated on first startup
 
 service:
   type: ClusterIP

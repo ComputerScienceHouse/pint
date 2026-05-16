@@ -7,11 +7,12 @@ require (
 	github.com/gin-contrib/multitemplate v1.1.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/google/uuid v1.6.0
+	github.com/smallstep/scep v0.0.0-20260331191114-261f960a40d1
+	go.uber.org/zap v1.28.0
 	howett.net/plist v1.0.1
 	k8s.io/api v0.36.0
 	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.36.0
-	go.uber.org/zap v1.28.0
 	software.sslmate.com/src/go-pkcs12 v0.7.1
 )
 
@@ -53,6 +54,7 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
+	github.com/smallstep/pkcs7 v0.2.1 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
