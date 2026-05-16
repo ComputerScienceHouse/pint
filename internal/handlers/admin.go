@@ -74,7 +74,7 @@ func AdminRegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 		}
 		existing := store.FindByUsername(username)
 		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
-		entry, _, _, err := issueClientCredentials(ipaClient, cfg, username)
+		entry, _, _, err := issueClientCredentials(ipaClient, cfg, username, username)
 		if err != nil {
 			log.Error("admin: credential regeneration failed", zap.String("target", username), zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -106,7 +106,7 @@ func AdminRootProvisionHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *
 			c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client already provisioned — use Regenerate to reissue credentials"))
 			return
 		}
-		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername)
+		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername, cfg.IPAPrincipal)
 		if err != nil {
 			log.Error("admin: root client provisioning failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -135,7 +135,7 @@ func AdminRootRegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg 
 		}
 		existing := store.FindByUsername(rootUsername)
 		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
-		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername)
+		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername, cfg.IPAPrincipal)
 		if err != nil {
 			log.Error("admin: root credential regeneration failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

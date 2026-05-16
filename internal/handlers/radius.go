@@ -50,7 +50,7 @@ func SaveSecretHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.C
 		if !ok {
 			return
 		}
-		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
+		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username, nav.Username)
 		if err != nil {
 			log.Error("radius enrollment failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -90,7 +90,7 @@ func RegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.C
 		existing := store.FindByUsername(nav.Username)
 		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
 
-		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username)
+		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, nav.Username, nav.Username)
 		if err != nil {
 			log.Error("radius credential regeneration failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -219,16 +219,18 @@ func commitStore(c *gin.Context, log *zap.Logger, store *radius.ClientStore, k8s
 	return "", nil
 }
 
-// issueClientCredentials generates an EC key and RadSec client cert for username.
-// Returns the RadiusClient to store (no PEM fields), plus the one-time keyPEM and certPEM.
+// issueClientCredentials generates an EC key and RadSec client cert.
+// username is the store key; principal is the FreeIPA principal and CSR CN.
+// For user certs these are the same value; for the org controller cert, principal
+// is the pint service principal (cfg.IPAPrincipal) while username is the reserved key.
 // The RADIUS shared secret is always "radsec" and is not stored on the client.
-func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, username string) (*radius.RadiusClient, string, string, error) {
-	privKey, csrPEM, err := profile.GenerateKeyAndCSR(username)
+func issueClientCredentials(ipaClient *freeipa.Client, cfg *config.Config, username, principal string) (*radius.RadiusClient, string, string, error) {
+	privKey, csrPEM, err := profile.GenerateKeyAndCSR(principal)
 	if err != nil {
 		return nil, "", "", err
 	}
 
-	certDER, err := ipaClient.CertRequest(username, string(csrPEM), cfg.RadSecCAName, cfg.RadSecClientCertProfile)
+	certDER, err := ipaClient.CertRequest(principal, string(csrPEM), cfg.RadSecCAName, cfg.RadSecClientCertProfile)
 	if err != nil {
 		return nil, "", "", err
 	}
