@@ -122,6 +122,26 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 	}
 }
 
+// SCEPChallengeHandler serves GET /profile/scep-challenge.
+// Issues a one-time challenge token that can be used with any SCEP client
+// (e.g. Get-SCEPCertificate on Windows, sscep or strongswan pki on Linux).
+func SCEPChallengeHandler(log *zap.Logger, challenges *scep.ChallengeStore) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		username, ok := getUsername(c)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
+			return
+		}
+		token, err := challenges.Issue(username)
+		if err != nil {
+			log.Error("challenge generation failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "challenge generation failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"challenge": token})
+	}
+}
+
 // CAHandler serves GET /profile/ca, returns the FreeIPA CA certificate as PEM.
 func CAHandler(caDER []byte) gin.HandlerFunc {
 	caPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER})

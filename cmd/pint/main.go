@@ -245,6 +245,7 @@ func main() {
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
 		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER, challengeStore, appleSigner))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
+		protected.GET("/profile/scep-challenge", handlers.SCEPChallengeHandler(log, challengeStore))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/secret", handlers.SaveSecretHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/regenerate", handlers.RegenerateHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
