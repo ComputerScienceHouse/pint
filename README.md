@@ -247,7 +247,7 @@ Source IP allowlists are enforced in `clients.conf` before any authentication oc
 
 EAP-TLS is the only supported authentication method with no password fallback. During the EAP exchange, FreeRADIUS validates the user's client certificate against `wifi-ca.pem` (the WiFi intermediate CA). Only certificates issued through PINT's `pint_wifi` profile will pass, since that profile enforces `clientAuth` EKU and the CA is not publicly trusted.
 
-TLS 1.2 is the minimum version. The cipher list is restricted to `ECDHE+AESGCM:DHE+AESGCM` with `secp384r1` as the negotiated ECDH curve, matching the EC keys in all PINT-issued certificates.
+TLS 1.2 is the minimum version. The cipher list is restricted to `ECDHE+AESGCM:DHE+AESGCM` with `secp384r1` as the negotiated ECDH curve. These control the TLS session's key exchange and are independent of the client certificate's key type — WiFi client certs may be RSA 2048 (iOS via SCEP) or EC (other platforms), both work with these cipher suites.
 
 ### Status Server
 
