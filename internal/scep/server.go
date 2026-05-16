@@ -30,7 +30,8 @@ type Handler struct {
 	raKey       *rsa.PrivateKey
 	// RA cert + wireless CA + root CA, ordered for GetCACert response.
 	// RA cert must be first so clients use it for envelope encryption.
-	caCerts []*x509.Certificate
+	caCerts    []*x509.Certificate
+	degCACerts []byte // precomputed GetCACert response body
 }
 
 func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Client, caName, certProfile string, raCert *x509.Certificate, raKey *rsa.PrivateKey, caDER, rootCACertDER []byte) (*Handler, error) {
@@ -42,6 +43,11 @@ func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Clien
 	if err != nil {
 		return nil, fmt.Errorf("parse root CA: %w", err)
 	}
+	caCerts := []*x509.Certificate{raCert, wifiCA, rootCA}
+	deg, err := sceppkg.DegenerateCertificates(caCerts)
+	if err != nil {
+		return nil, fmt.Errorf("build CA cert response: %w", err)
+	}
 	return &Handler{
 		log:         log,
 		store:       store,
@@ -50,7 +56,8 @@ func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Clien
 		certProfile: certProfile,
 		raCert:      raCert,
 		raKey:       raKey,
-		caCerts:     []*x509.Certificate{raCert, wifiCA, rootCA},
+		caCerts:     caCerts,
+		degCACerts:  deg,
 	}, nil
 }
 
@@ -75,13 +82,7 @@ func (h *Handler) handle(c *gin.Context) {
 }
 
 func (h *Handler) getCACert(c *gin.Context) {
-	deg, err := sceppkg.DegenerateCertificates(h.caCerts)
-	if err != nil {
-		h.log.Error("scep: GetCACert failed", zap.Error(err))
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-	c.Data(http.StatusOK, "application/x-x509-ca-ra-cert", deg)
+	c.Data(http.StatusOK, "application/x-x509-ca-ra-cert", h.degCACerts)
 }
 
 func (h *Handler) pkiOperation(c *gin.Context) {
@@ -91,7 +92,7 @@ func (h *Handler) pkiOperation(c *gin.Context) {
 		// SCEP GET fallback: message is base64-encoded in the query param.
 		body, err = base64.StdEncoding.DecodeString(c.Query("message"))
 	} else {
-		body, err = io.ReadAll(c.Request.Body)
+		body, err = io.ReadAll(io.LimitReader(c.Request.Body, 64*1024))
 	}
 	if err != nil || len(body) == 0 {
 		c.Status(http.StatusBadRequest)

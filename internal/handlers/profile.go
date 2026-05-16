@@ -44,9 +44,9 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 			return
 		}
 
+		radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
 		switch platform {
 		case "windows":
-			radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
 			wlan, err := profile.BuildWLANProfile(profile.WLANProfileParams{
 				SSID:       cfg.WiFiSSID,
 				RadiusHost: radiusHost,
@@ -68,7 +68,6 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "challenge generation failed"})
 				return
 			}
-			radiusHost := strings.Split(cfg.RadiusServer, ":")[0]
 			mc, err := profile.BuildMobileconfig(profile.MobileconfigParams{
 				SSID:                 cfg.WiFiSSID,
 				RadiusHost:           radiusHost,

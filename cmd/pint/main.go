@@ -471,10 +471,8 @@ func loadOrGenerateSCEPRACert(ctx context.Context, log *zap.Logger, k8sClient ku
 		ObjectMeta: metav1.ObjectMeta{Name: cfg.SCEPRACertSecret, Namespace: cfg.Namespace},
 		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
 	}
-	if _, createErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Create(ctx, raSecret, metav1.CreateOptions{}); createErr != nil {
-		if _, updateErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Update(ctx, raSecret, metav1.UpdateOptions{}); updateErr != nil {
-			return nil, nil, nil, fmt.Errorf("store SCEP RA cert: %w", updateErr)
-		}
+	if err := radius.UpsertSecret(ctx, k8sClient, raSecret); err != nil {
+		return nil, nil, nil, fmt.Errorf("store SCEP RA cert: %w", err)
 	}
 	log.Info("generated new SCEP RA cert")
 	return cert, key, cert.Raw, nil

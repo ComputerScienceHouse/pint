@@ -45,7 +45,7 @@ func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, se
 //   - ca.pem: RadSec CA chain; verifies connecting router client certificates
 //   - wifi-ca.pem: WiFi CA cert; verifies EAP-TLS user certificates
 func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, certPEM, keyPEM, caPEM, wifiCAPEM []byte) error {
-	return upsertSecret(ctx, k8s, &corev1.Secret{
+	return UpsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
 		Data: map[string][]byte{
 			"tls.crt":     certPEM,
@@ -85,8 +85,8 @@ func patchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, se
 	return err
 }
 
-// upsertSecret creates or updates a Kubernetes Secret.
-func upsertSecret(ctx context.Context, k8s kubernetes.Interface, secret *corev1.Secret) error {
+// UpsertSecret creates or updates a Kubernetes Secret.
+func UpsertSecret(ctx context.Context, k8s kubernetes.Interface, secret *corev1.Secret) error {
 	ns := secret.Namespace
 	_, err := k8s.CoreV1().Secrets(ns).Update(ctx, secret, metav1.UpdateOptions{})
 	if errors.IsNotFound(err) {
