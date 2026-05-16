@@ -182,7 +182,7 @@
       <a href="/profile/ca" class="btn btn-outline-success">
         <span class="mdi mdi-certificate-outline me-1"></span> Download CA Cert (.pem)
       </a>
-      <button class="btn btn-success" onclick="downloadProfile('android')" id="btn-android">
+      <button class="btn btn-success" onclick="downloadProfile('manual', 'android')" id="btn-android">
         <span class="mdi mdi-download me-1"></span> Download Client Cert (.p12)
       </button>
       <span id="spinner-android" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
@@ -205,11 +205,11 @@
       <a href="/profile/ca" class="btn btn-outline-secondary">
         <span class="mdi mdi-certificate-outline me-1"></span> Download CA Cert (.pem)
       </a>
-      <button class="btn btn-secondary" onclick="downloadProfile('android', 'windows-p12')" id="btn-windows-p12">
+      <button class="btn btn-secondary" onclick="downloadProfile('manual', 'windows-p12')" id="btn-windows-p12">
         <span class="mdi mdi-card-account-details-outline me-1"></span> Download Client Cert (.p12)
       </button>
       <span id="spinner-windows-p12" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
-      <button class="btn btn-secondary" onclick="downloadProfile('windows')" id="btn-windows">
+      <button class="btn btn-secondary" onclick="doDownload('windows', 'windows', null)" id="btn-windows">
         <span class="mdi mdi-download me-1"></span> Download WLAN Profile (.xml)
       </button>
       <span id="spinner-windows" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
@@ -237,7 +237,7 @@
       <a href="/profile/ca" class="btn btn-outline-info">
         <span class="mdi mdi-certificate-outline me-1"></span> Download CA Cert (.pem)
       </a>
-      <button class="btn btn-info" onclick="downloadProfile('android', 'linux')" id="btn-linux">
+      <button class="btn btn-info" onclick="downloadProfile('manual', 'linux')" id="btn-linux">
         <span class="mdi mdi-download me-1"></span> Download Client Cert (.p12)
       </button>
       <span id="spinner-linux" class="text-muted" style="display:none;"><span class="mdi mdi-loading mdi-spin"></span> Generating...</span>
@@ -245,12 +245,65 @@
     <div id="error-linux" class="text-danger small mt-2" style="display:none;"></div>
   </div>
 </div>
+<!-- Device name modal — shown before any cert download -->
+<div class="modal fade" id="deviceNameModal" tabindex="-1" aria-labelledby="deviceNameModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deviceNameModalLabel">Name this device</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Give this device a name so you can identify its certificate later (e.g. &ldquo;ARG Room PDP-11&rdquo; or &ldquo;IBM PCjr&rdquo;).</p>
+        <label for="deviceNameInput" class="form-label fw-semibold">Device name</label>
+        <input type="text" class="form-control" id="deviceNameInput" placeholder="ARG Room PDP-11" maxlength="128" autocomplete="off">
+        <div class="invalid-feedback">Please enter a device name.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="deviceNameConfirm" onclick="confirmDeviceName()">Generate &amp; Download</button>
+      </div>
+    </div>
+  </div>
+</div>
 {{end}}
+
 {{define "scripts"}}
 <script>
+let _pendingPlatform = null;
+let _pendingBtnId    = null;
+let _deviceModal     = null;
+
 function downloadProfile(platform, btnId) {
-    const id = btnId || platform;
-    const btn = document.getElementById('btn-' + id);
+    const id    = btnId || platform;
+    const input = document.getElementById('deviceNameInput');
+    _pendingPlatform = platform;
+    _pendingBtnId    = id;
+    input.value = '';
+    input.classList.remove('is-invalid');
+    if (!_deviceModal) {
+        _deviceModal = new bootstrap.Modal(document.getElementById('deviceNameModal'));
+        document.getElementById('deviceNameModal').addEventListener('shown.bs.modal', () => input.focus());
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') confirmDeviceName(); });
+    }
+    _deviceModal.show();
+}
+
+function confirmDeviceName() {
+    const input = document.getElementById('deviceNameInput');
+    const name  = input.value.trim();
+    if (!name) {
+        input.classList.add('is-invalid');
+        return;
+    }
+    _deviceModal.hide();
+    doDownload(_pendingPlatform, _pendingBtnId, name);
+}
+
+const OS_NORMALIZE = {'windows-p12': 'windows'};
+
+function doDownload(platform, id, deviceName) {
+    const btn     = document.getElementById('btn-' + id);
     const spinner = document.getElementById('spinner-' + id);
     const errorEl = document.getElementById('error-' + id);
 
@@ -258,10 +311,11 @@ function downloadProfile(platform, btnId) {
     spinner.style.display = 'inline';
     if (errorEl) { errorEl.textContent = ''; errorEl.style.display = 'none'; }
 
-    fetch('/profile/generate?platform=' + platform, {
-            method: 'POST',
-            headers: {'X-CSRF-Token': '{{.CSRFToken}}'},
-        })
+    const os = OS_NORMALIZE[id] || id;
+    let url = '/profile/generate?platform=' + platform + '&os=' + encodeURIComponent(os);
+    if (deviceName) url += '&device_name=' + encodeURIComponent(deviceName);
+
+    fetch(url, {method: 'POST', headers: {'X-CSRF-Token': '{{.CSRFToken}}'}})
         .then(r => {
             if (!r.ok) throw new Error('Generation failed (' + r.status + '). Please try again.');
             const cd = r.headers.get('Content-Disposition') || '';

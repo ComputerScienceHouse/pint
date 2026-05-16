@@ -14,6 +14,7 @@ import (
 
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/ComputerScienceHouse/pint/internal/config"
+	"github.com/ComputerScienceHouse/pint/internal/devicemap"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
 	"github.com/ComputerScienceHouse/pint/internal/logger"
@@ -174,6 +175,7 @@ func main() {
 	log.Info("scep RA cert loaded", zap.String("subject", scepRACert.Subject.CommonName), zap.String("expires", scepRACert.NotAfter.Format("2006-01-02")))
 
 	challengeStore := internscep.NewChallengeStore()
+	dm := devicemap.New(k8sClient, cfg.Namespace, cfg.DeviceMapSecret)
 
 	// Load or request the profile signing cert when code signing is configured.
 	var appleSigner *profile.Signer
@@ -226,7 +228,7 @@ func main() {
 	}
 
 	// SCEP public routes — iOS calls these without a session cookie.
-	scepHandler, err := internscep.NewHandler(log, challengeStore, ipaClient, cfg.IPAWirelessCAName, cfg.IPACertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
+	scepHandler, err := internscep.NewHandler(log, challengeStore, ipaClient, dm, cfg.IPAWirelessCAName, cfg.IPACertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
 	if err != nil {
 		log.Fatal("scep handler init failed", zap.Error(err))
 	}
@@ -243,7 +245,7 @@ func main() {
 	{
 		protected.GET("/dashboard", handlers.DashboardHandler())
 		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
-		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER, challengeStore, appleSigner))
+		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER, challengeStore, appleSigner, dm))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/profile/scep-challenge", handlers.SCEPChallengeHandler(log, challengeStore))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))

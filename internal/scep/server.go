@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
+	"github.com/ComputerScienceHouse/pint/internal/devicemap"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/gin-gonic/gin"
 	sceppkg "github.com/smallstep/scep"
@@ -24,6 +26,7 @@ type Handler struct {
 	log         *zap.Logger
 	store       *ChallengeStore
 	ipaClient   *freeipa.Client
+	deviceMap   *devicemap.DeviceMap
 	caName      string
 	certProfile string
 	raCert      *x509.Certificate
@@ -34,7 +37,7 @@ type Handler struct {
 	degCACerts []byte // precomputed GetCACert response body
 }
 
-func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Client, caName, certProfile string, raCert *x509.Certificate, raKey *rsa.PrivateKey, caDER, rootCACertDER []byte) (*Handler, error) {
+func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Client, dm *devicemap.DeviceMap, caName, certProfile string, raCert *x509.Certificate, raKey *rsa.PrivateKey, caDER, rootCACertDER []byte) (*Handler, error) {
 	wifiCA, err := x509.ParseCertificate(caDER)
 	if err != nil {
 		return nil, fmt.Errorf("parse wifi CA: %w", err)
@@ -52,6 +55,7 @@ func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Clien
 		log:         log,
 		store:       store,
 		ipaClient:   ipaClient,
+		deviceMap:   dm,
 		caName:      caName,
 		certProfile: certProfile,
 		raCert:      raCert,
@@ -118,7 +122,7 @@ func (h *Handler) pkiOperation(c *gin.Context) {
 		return
 	}
 
-	username, ok := h.store.Validate(msg.CSRReqMessage.ChallengePassword)
+	username, deviceName, ok := h.store.Validate(msg.CSRReqMessage.ChallengePassword)
 	if !ok {
 		h.log.Warn("scep: invalid or expired challenge")
 		h.sendFail(c, msg, sceppkg.BadRequest)
@@ -147,7 +151,16 @@ func (h *Handler) pkiOperation(c *gin.Context) {
 		return
 	}
 
-	h.log.Info("scep: certificate issued", zap.String("username", username), zap.String("cn", issuedCert.Subject.CommonName))
+	serial := issuedCert.SerialNumber.String()
+	h.log.Info("scep: certificate issued", zap.String("username", username), zap.String("serial", serial))
+
+	if h.deviceMap != nil {
+		info := devicemap.DeviceInfo{DeviceName: deviceName, Platform: "ios", EnrolledAt: time.Now()}
+		if err := h.deviceMap.Set(c.Request.Context(), serial, info); err != nil {
+			h.log.Error("scep: failed to record device info", zap.String("serial", serial), zap.Error(err))
+		}
+	}
+
 	c.Data(http.StatusOK, "application/x-pki-message", resp.Raw)
 }
 

@@ -52,6 +52,7 @@ type Config struct {
 	// SCEP
 	SCEPURL          string // derived: ServerURL + /scep
 	SCEPRACertSecret string // PINT_SCEP_RA_CERT_SECRET: K8s Secret storing the self-signed SCEP RA cert+key (default: pint-scep-ra-cert)
+	DeviceMapSecret  string // PINT_DEVICE_MAP_SECRET: K8s Secret storing the cert serial → device info map (default: pint-device-map)
 
 	// UI
 	RadiusServer string
@@ -117,6 +118,7 @@ func Load() (*Config, error) {
 	cfg.CodeSigningCertProfile = optional("PINT_IPA_CODE_SIGNING_CERT_PROFILE", "pint_profile_signing")
 	cfg.ProfileSigningCertSecret = optional("PINT_PROFILE_SIGNING_CERT_SECRET", "pint-profile-signing-cert")
 	cfg.SCEPRACertSecret = optional("PINT_SCEP_RA_CERT_SECRET", "pint-scep-ra-cert")
+	cfg.DeviceMapSecret = optional("PINT_DEVICE_MAP_SECRET", "pint-device-map")
 
 	cfg.LoginURL = cfg.ServerURL + "/auth/login"
 	cfg.SCEPURL = cfg.ServerURL + "/scep"

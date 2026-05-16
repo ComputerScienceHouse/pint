@@ -2,12 +2,15 @@
 package handlers
 
 import (
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ComputerScienceHouse/pint/internal/config"
+	"github.com/ComputerScienceHouse/pint/internal/devicemap"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/scep"
@@ -26,15 +29,16 @@ func ProfilePageHandler(cfg *config.Config) gin.HandlerFunc {
 	}
 }
 
-// GenerateProfileHandler serves POST /profile/generate?platform=ios|android|windows.
+// GenerateProfileHandler serves POST /profile/generate?platform=ios|manual|windows.
 // signer is optional; when non-nil, iOS mobileconfig profiles are CMS-signed.
 // challenges issues one-time SCEP enrollment passwords for iOS profiles.
 // scepRACertDER is the DER-encoded SCEP RA certificate embedded as CAFingerprint.
-func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER []byte, challenges *scep.ChallengeStore, signer *profile.Signer) gin.HandlerFunc {
+// dm is optional; when non-nil, cert serial → device info is recorded on issuance.
+func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER []byte, challenges *scep.ChallengeStore, signer *profile.Signer, dm *devicemap.DeviceMap) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		platform := c.Query("platform")
-		if platform != "ios" && platform != "android" && platform != "windows" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "platform must be ios, android, or windows"})
+		if platform != "ios" && platform != "manual" && platform != "windows" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "platform must be ios, manual, or windows"})
 			return
 		}
 
@@ -62,7 +66,7 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 			c.Data(http.StatusOK, "application/xml", wlan)
 
 		case "ios":
-			challenge, err := challenges.Issue(username)
+			challenge, err := challenges.Issue(username, c.Query("device_name"))
 			if err != nil {
 				log.Error("challenge generation failed", zap.Error(err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "challenge generation failed"})
@@ -96,7 +100,7 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 			c.Header("Content-Disposition", `attachment; filename="csh-wifi.mobileconfig"`)
 			c.Data(http.StatusOK, "application/x-apple-aspen-config", mc)
 
-		case "android":
+		case "manual":
 			privKey, csrPEM, err := profile.GenerateKeyAndCSR(username)
 			if err != nil {
 				log.Error("key generation failed", zap.Error(err))
@@ -108,6 +112,24 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 				log.Error("cert request failed", zap.Error(err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("cert request failed: %v", err)})
 				return
+			}
+			if dm != nil {
+				deviceName := c.Query("device_name")
+				if len(deviceName) > 256 {
+					deviceName = deviceName[:256]
+				}
+				if cert, parseErr := x509.ParseCertificate(certDER); parseErr != nil {
+					log.Error("failed to parse issued cert for device map", zap.Error(parseErr))
+				} else {
+					info := devicemap.DeviceInfo{
+						DeviceName: deviceName,
+						Platform:   c.Query("os"),
+						EnrolledAt: time.Now(),
+					}
+					if err := dm.Set(c.Request.Context(), cert.SerialNumber.String(), info); err != nil {
+						log.Error("failed to record device info", zap.Error(err))
+					}
+				}
 			}
 			p12, err := profile.BuildPKCS12(privKey, certDER, caDER, "")
 			if err != nil {
@@ -132,7 +154,7 @@ func SCEPChallengeHandler(log *zap.Logger, challenges *scep.ChallengeStore) gin.
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 			return
 		}
-		token, err := challenges.Issue(username)
+		token, err := challenges.Issue(username, "")
 		if err != nil {
 			log.Error("challenge generation failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "challenge generation failed"})
