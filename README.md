@@ -38,13 +38,13 @@ sequenceDiagram
     iOS->>P: Download profile (authenticated)
     P->>P: Issue one-time SCEP challenge
     P-->>iOS: Mobileconfig with SCEP payload + challenge
-    note over iOS: Profile installed; device generates RSA 2048 keypair
+    note over iOS: Device generates RSA 2048 keypair on-device
     iOS->>P: SCEP PKIOperation (CSR + challenge, CMS-wrapped)
     P->>P: Validate challenge; extract username
     P->>IPA: cert_request(CSR, username, pint_wifi)
     IPA-->>P: Signed certificate (DER)
     P-->>iOS: CMS-wrapped certificate response
-    note over iOS: Certificate installed; WiFi connects automatically
+    note over iOS: Certificate installed; WiFi connects
     note over iOS,P: Near expiry: iOS re-runs SCEP automatically
 ```
 
