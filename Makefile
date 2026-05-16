@@ -1,4 +1,4 @@
-.PHONY: build test lint dev dev-stop dev-setup dev-cluster dev-freeradius dev-metrics dev-secret dev-logs dev-forward radsec-smoketest clean
+.PHONY: build test lint dev dev-stop dev-setup dev-cluster dev-freeradius dev-metrics dev-secret dev-logs dev-forward radsec-smoketest scep-smoketest clean
 
 BINARY          = pint
 STUB            = freeipa-stub
@@ -7,6 +7,7 @@ NAMESPACE       = pint
 FR_IMAGE        = pint-freeradius:dev
 SMOKETEST_IMAGE = pint-smoketest:dev
 SMOKETEST_POD   = pint-radsec-smoketest
+SCEP_PINT_URL  ?= http://localhost:8080
 GIT_COMMIT      ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 VERSION_PKG      = github.com/ComputerScienceHouse/pint/internal/version
 LDFLAGS          = -ldflags "-X $(VERSION_PKG).GitCommit=$(GIT_COMMIT)"
@@ -81,6 +82,14 @@ dev-logs:
 # Port-forward RadSec to localhost:2083 (alternative to NodePort 32083).
 dev-forward:
 	kubectl port-forward -n $(NAMESPACE) service/pint-freeradius 2083:2083
+
+# ── SCEP smoke test ───────────────────────────────────────────────────────────
+
+# Tests initial SCEP enrollment (PKCSReq) and certificate renewal (RenewalReq)
+# against the local dev stack (make dev must be running).
+# Requires: brew install strongswan
+scep-smoketest:
+	PINT_URL=$(SCEP_PINT_URL) bash dev/scep-smoketest/run-scep-smoketest.sh
 
 # ── RadSec smoke test ─────────────────────────────────────────────────────────
 

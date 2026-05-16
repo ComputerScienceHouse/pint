@@ -66,7 +66,7 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 			c.Data(http.StatusOK, "application/xml", wlan)
 
 		case "ios":
-			challenge, err := challenges.Issue(username, c.Query("device_name"))
+			challenge, err := challenges.Issue(username, c.Query("device_name"), "ios")
 			if err != nil {
 				log.Error("challenge generation failed", zap.Error(err))
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "challenge generation failed"})
@@ -122,6 +122,7 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 					log.Error("failed to parse issued cert for device map", zap.Error(parseErr))
 				} else {
 					info := devicemap.DeviceInfo{
+						Username:   username,
 						DeviceName: deviceName,
 						Platform:   c.Query("os"),
 						EnrolledAt: time.Now(),
@@ -154,7 +155,7 @@ func SCEPChallengeHandler(log *zap.Logger, challenges *scep.ChallengeStore) gin.
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "not authenticated"})
 			return
 		}
-		token, err := challenges.Issue(username, "")
+		token, err := challenges.Issue(username, c.Query("device_name"), c.Query("os"))
 		if err != nil {
 			log.Error("challenge generation failed", zap.Error(err))
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "challenge generation failed"})

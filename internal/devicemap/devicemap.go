@@ -19,15 +19,19 @@ const secretKey = "device-map.json"
 
 // DeviceInfo holds what we know about a device at enrollment time.
 type DeviceInfo struct {
-	DeviceName string    `json:"device_name,omitempty"`
-	Platform   string    `json:"platform,omitempty"`
-	EnrolledAt time.Time `json:"enrolled_at"`
+	Username      string    `json:"username,omitempty"`
+	DeviceName    string    `json:"device_name,omitempty"`
+	Platform      string    `json:"platform,omitempty"`
+	IsSCEP        bool      `json:"is_scep,omitempty"`
+	EnrolledAt    time.Time `json:"enrolled_at"`
+	LastRenewedAt time.Time `json:"last_renewed_at,omitempty"`
+	ExpiresAt     time.Time `json:"expires_at,omitempty"`
 }
 
 // DeviceMap is a Kubernetes-Secret-backed map of cert serial → DeviceInfo.
 // A mutex serializes writes so concurrent SCEP enrollments queue rather than race.
 type DeviceMap struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	k8s        kubernetes.Interface
 	namespace  string
 	secretName string
@@ -50,9 +54,51 @@ func (m *DeviceMap) Set(ctx context.Context, serial string, info DeviceInfo) err
 	return m.save(ctx, entries)
 }
 
+// Get returns the DeviceInfo for a single cert serial number.
+func (m *DeviceMap) Get(ctx context.Context, serial string) (DeviceInfo, bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	entries, err := m.load(ctx)
+	if err != nil {
+		return DeviceInfo{}, false, err
+	}
+	info, ok := entries[serial]
+	return info, ok, nil
+}
+
 // All returns a copy of the full serial → DeviceInfo map.
 func (m *DeviceMap) All(ctx context.Context) (map[string]DeviceInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.load(ctx)
+}
+
+// Replace atomically removes oldSerial and stores newSerial with info in a single
+// K8s read+write. It returns the previous DeviceInfo for oldSerial (zero value if
+// not found), which callers can use to carry forward enrollment metadata.
+func (m *DeviceMap) Replace(ctx context.Context, oldSerial, newSerial string, info DeviceInfo) (DeviceInfo, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entries, err := m.load(ctx)
+	if err != nil {
+		return DeviceInfo{}, err
+	}
+	prev := entries[oldSerial]
+	delete(entries, oldSerial)
+	entries[newSerial] = info
+	return prev, m.save(ctx, entries)
+}
+
+// Delete removes the device map entry for the given cert serial number.
+func (m *DeviceMap) Delete(ctx context.Context, serial string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	entries, err := m.load(ctx)
+	if err != nil {
+		return err
+	}
+	delete(entries, serial)
+	return m.save(ctx, entries)
 }
 
 func (m *DeviceMap) load(ctx context.Context) (map[string]DeviceInfo, error) {

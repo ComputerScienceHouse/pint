@@ -190,11 +190,20 @@
                     <a class="nav-link{{if eq .CurrentPath "/dashboard"}} active" aria-current="page{{end}}" href="/dashboard"><span class="mdi mdi-view-dashboard-outline"></span> Dashboard</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link{{if eq .CurrentPath "/devices"}} active" aria-current="page{{end}}" href="/devices"><span class="mdi mdi-devices"></span> Devices</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link{{if eq .CurrentPath "/status"}} active" aria-current="page{{end}}" href="/status"><span class="mdi mdi-pulse"></span> Status</a>
                 </li>
                 {{if .IsRTP}}
-                <li class="nav-item">
-                    <a class="nav-link{{if eq .CurrentPath "/admin/radius"}} active" aria-current="page{{end}}" href="/admin/radius"><span class="mdi mdi-shield-account"></span> Admin</a>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle{{if or (eq .CurrentPath "/admin/radius") (eq .CurrentPath "/admin/devices")}} active" aria-current="page{{end}}" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="mdi mdi-shield-account"></span> Admin
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="/admin/radius"><span class="mdi mdi-wifi-lock me-1"></span> RADIUS Clients</a></li>
+                        <li><a class="dropdown-item" href="/admin/devices"><span class="mdi mdi-devices me-1"></span> Device Management</a></li>
+                    </ul>
                 </li>
                 {{end}}
             </ul>

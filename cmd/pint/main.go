@@ -248,6 +248,8 @@ func main() {
 		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER, challengeStore, appleSigner, dm))
 		protected.GET("/profile/ca", handlers.CAHandler(caDER))
 		protected.GET("/profile/scep-challenge", handlers.SCEPChallengeHandler(log, challengeStore))
+		protected.GET("/devices", handlers.DevicesPageHandler(log, ipaClient, cfg, dm))
+		protected.POST("/devices/revoke", handlers.RevokeDeviceHandler(log, ipaClient, cfg, dm))
 		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/secret", handlers.SaveSecretHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
 		protected.POST("/radius/regenerate", handlers.RegenerateHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
@@ -261,6 +263,8 @@ func main() {
 		admin := protected.Group("/admin")
 		admin.Use(handlers.RequireRTP)
 		{
+			admin.GET("/devices", handlers.AdminDevicesPageHandler(log, dm))
+			admin.POST("/devices/revoke", handlers.AdminRevokeDeviceHandler(log, ipaClient, cfg, dm))
 			admin.GET("/radius", handlers.AdminRadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
 			admin.POST("/radius/delete", handlers.AdminDeleteHandler(log, cfg, k8sClient, ipaClient))
 			admin.POST("/radius/regenerate", handlers.AdminRegenerateHandler(log, ipaClient, cfg, k8sClient))
@@ -290,7 +294,7 @@ func formatDuration(d time.Duration) string {
 func buildTemplates() multitemplate.Render {
 	r := multitemplate.New()
 	layout := "templates/layout.html"
-	for _, page := range []string{"index", "dashboard", "profile", "radius", "status", "admin_radius"} {
+	for _, page := range []string{"index", "dashboard", "profile", "radius", "status", "admin_radius", "devices", "admin_devices"} {
 		r.AddFromFiles(page+".html", layout, "templates/"+page+".html")
 	}
 	return r

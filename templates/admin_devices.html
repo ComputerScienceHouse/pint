@@ -1,0 +1,126 @@
+<!-- templates/admin_devices.html -->
+{{template "layout.html" .}}
+{{define "title"}}Device Management{{end}}
+{{define "content"}}
+
+<h1 class="page-title">Device Management</h1>
+
+{{if .FlashSuccess}}
+<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+  <span class="mdi mdi-check-circle-outline me-1"></span> {{.FlashSuccess}}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{{end}}
+{{if .FlashError}}
+<div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+  <span class="mdi mdi-alert-circle-outline me-1"></span> {{.FlashError}}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{{end}}
+
+{{if not .Devices}}
+<div class="text-center py-5 text-muted">
+  <span class="mdi mdi-devices" style="font-size:2.5rem; display:block; margin-bottom:.5rem;"></span>
+  No enrolled devices found.
+</div>
+{{else}}
+<p class="text-muted mb-3" style="font-size:.875rem;">
+  All WiFi certificates issued through PINT. Revoke a certificate to remove that device's WiFi access.
+</p>
+
+<div class="card" style="border-color: var(--pint-border);">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead style="background: var(--pint-alt-header-bg); font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--pint-muted-strong);">
+        <tr>
+          <th class="ps-3">User</th>
+          <th>Device</th>
+          <th>Platform</th>
+          <th>Enrolled</th>
+          <th>Serial</th>
+          <th class="pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Devices}}
+        {{$platformIcon := "mdi-help-circle-outline"}}
+        {{if eq .Platform "ios"}}{{$platformIcon = "mdi-apple"}}{{else if eq .Platform "android"}}{{$platformIcon = "mdi-android"}}{{else if eq .Platform "windows"}}{{$platformIcon = "mdi-microsoft-windows"}}{{else if eq .Platform "linux"}}{{$platformIcon = "mdi-linux"}}{{end}}
+        <tr>
+          <td class="ps-3">
+            <div class="d-flex align-items-center gap-2">
+              <img src="https://profiles.csh.rit.edu/image/{{.Username}}" class="rounded-circle" width="28" height="28" alt="{{.Username}}" onerror="this.style.display='none'">
+              <code style="font-size:.8rem;">{{if .Username}}{{.Username}}{{else}}<em class="text-muted">unknown</em>{{end}}</code>
+            </div>
+          </td>
+          <td>{{if .DeviceName}}{{.DeviceName}}{{else}}<span class="text-muted">—</span>{{end}}</td>
+          <td>
+            {{if .Platform}}
+            <span class="mdi {{$platformIcon}} me-1" style="font-size:.95em;"></span>{{.Platform}}
+            {{else}}<span class="text-muted">—</span>{{end}}
+          </td>
+          <td style="font-size:.85rem;">{{if not .EnrolledAt.IsZero}}{{.EnrolledAt.Format "Jan 2, 2006"}}{{else}}<span class="text-muted">—</span>{{end}}</td>
+          <td><code style="font-size:.75rem;">{{.Serial}}</code></td>
+          <td class="pe-3 text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger"
+                    data-serial="{{.Serial}}"
+                    data-username="{{.Username}}"
+                    data-device-name="{{if .DeviceName}}{{.DeviceName}}{{else}}unknown device{{end}}"
+                    onclick="confirmRevoke(this.dataset.serial, this.dataset.username, this.dataset.deviceName)">
+              <span class="mdi mdi-cancel me-1"></span> Revoke
+            </button>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<!-- Revoke confirmation modal -->
+<div class="modal fade" id="revokeModal" tabindex="-1" aria-labelledby="revokeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="revokeModalLabel">Revoke certificate?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">This will immediately revoke the WiFi certificate for <strong id="revokeDeviceName"></strong> (<code id="revokeUsername"></code>).</p>
+        <p class="text-muted small mb-0">The device will lose network access. This cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="revokeConfirm">
+          <span class="mdi mdi-cancel me-1"></span> Revoke
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<form id="revokeForm" method="POST" action="/admin/devices/revoke" style="display:none;">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <input type="hidden" name="serial" id="revokeSerial">
+</form>
+
+{{end}}
+{{define "scripts"}}
+<script>
+let _revokeModal = null;
+
+function confirmRevoke(serial, username, deviceName) {
+    document.getElementById('revokeSerial').value = serial;
+    document.getElementById('revokeUsername').textContent = username;
+    document.getElementById('revokeDeviceName').textContent = deviceName;
+    if (!_revokeModal) {
+        _revokeModal = new bootstrap.Modal(document.getElementById('revokeModal'));
+    }
+    _revokeModal.show();
+}
+
+document.getElementById('revokeConfirm').addEventListener('click', () => {
+    document.getElementById('revokeForm').submit();
+});
+</script>
+{{end}}

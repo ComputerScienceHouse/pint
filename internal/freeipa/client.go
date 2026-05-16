@@ -117,6 +117,27 @@ func (c *Client) CertRequest(principal, csrPEM, caName, profileID string) ([]byt
 	return base64.StdEncoding.DecodeString(result.Certificate)
 }
 
+// CertFind returns all certificates issued to username under caName.
+// The result includes both active and revoked certs.
+func (c *Client) CertFind(username, caName string) ([]CertInfo, error) {
+	kwargs := map[string]interface{}{
+		"user":      username,
+		"sizelimit": 0,
+	}
+	if caName != "" {
+		kwargs["cacn"] = caName
+	}
+	raw, err := c.rpc("cert_find", []interface{}{}, kwargs)
+	if err != nil {
+		return nil, fmt.Errorf("cert_find: %w", err)
+	}
+	var certs []CertInfo
+	if err := json.Unmarshal(raw, &certs); err != nil {
+		return nil, fmt.Errorf("cert_find parse: %w", err)
+	}
+	return certs, nil
+}
+
 // CertRevoke revokes a certificate by serial number.
 // reason follows RFC 5280: 0=unspecified, 4=superseded, 5=cessationOfOperation.
 // Returns nil if the cert was already revoked or not found, so callers can ignore

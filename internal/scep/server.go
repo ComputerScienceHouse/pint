@@ -5,14 +5,17 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"time"
 
 	"github.com/ComputerScienceHouse/pint/internal/devicemap"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/gin-gonic/gin"
+	"github.com/smallstep/pkcs7"
 	sceppkg "github.com/smallstep/scep"
 	"go.uber.org/zap"
 )
@@ -20,6 +23,12 @@ import (
 // getCACaps response advertises POST support so clients don't fall back to
 // GET-with-base64-message for PKIOperation.
 const caCaps = "POSTPKIOperation\nSHA-256\nAES\n"
+
+func init() {
+	// DES is disabled in OpenSSL 3+ — force AES for all SCEP envelope encryption.
+	// Set once at package import rather than per-handler to avoid a data race.
+	pkcs7.ContentEncryptionAlgorithm = pkcs7.EncryptionAlgorithmAES128CBC
+}
 
 // Handler handles SCEP GetCACert and PKIOperation requests.
 type Handler struct {
@@ -31,6 +40,8 @@ type Handler struct {
 	certProfile string
 	raCert      *x509.Certificate
 	raKey       *rsa.PrivateKey
+	wifiCA      *x509.Certificate // verifies RenewalReq signer certs
+	rootCA      *x509.Certificate
 	// RA cert + wireless CA + root CA, ordered for GetCACert response.
 	// RA cert must be first so clients use it for envelope encryption.
 	caCerts    []*x509.Certificate
@@ -60,6 +71,8 @@ func NewHandler(log *zap.Logger, store *ChallengeStore, ipaClient *freeipa.Clien
 		certProfile: certProfile,
 		raCert:      raCert,
 		raKey:       raKey,
+		wifiCA:      wifiCA,
+		rootCA:      rootCA,
 		caCerts:     caCerts,
 		degCACerts:  deg,
 	}, nil
@@ -122,11 +135,51 @@ func (h *Handler) pkiOperation(c *gin.Context) {
 		return
 	}
 
-	username, deviceName, ok := h.store.Validate(msg.CSRReqMessage.ChallengePassword)
-	if !ok {
-		h.log.Warn("scep: invalid or expired challenge")
-		h.sendFail(c, msg, sceppkg.BadRequest)
-		return
+	var username, deviceName, platform string
+	var oldCertSerial *big.Int
+
+	switch msg.MessageType {
+	case sceppkg.PKCSReq:
+		// Some clients (sscep, iOS) send PKCSReq signed with their existing cert
+		// rather than a self-signed temp cert when renewing. Detect this by
+		// checking whether the signer cert verifies against our WiFi CA chain;
+		// if it does, treat it as a renewal without requiring a challenge password.
+		if signerCert, err := clientCertFromSCEPMessage(msg.Raw); err == nil {
+			if h.verifyWiFiCert(signerCert) == nil {
+				username = signerCert.Subject.CommonName
+				oldCertSerial = signerCert.SerialNumber
+				h.log.Info("scep: PKCSReq renewal (signed with existing cert)",
+					zap.String("username", username), zap.String("old_serial", oldCertSerial.String()))
+				break
+			}
+		}
+		// Initial enrollment: validate challenge password.
+		var ok bool
+		username, deviceName, platform, ok = h.store.Validate(msg.CSRReqMessage.ChallengePassword)
+		if !ok {
+			h.log.Warn("scep: invalid or expired challenge")
+			h.sendFail(c, msg, sceppkg.BadRequest)
+			return
+		}
+		if platform == "" {
+			platform = "ios"
+		}
+
+	case sceppkg.RenewalReq:
+		signerCert, err := clientCertFromSCEPMessage(msg.Raw)
+		if err != nil {
+			h.log.Warn("scep: renewal signer cert extraction failed", zap.Error(err))
+			h.sendFail(c, msg, sceppkg.BadMessageCheck)
+			return
+		}
+		if err := h.verifyWiFiCert(signerCert); err != nil {
+			h.log.Warn("scep: renewal signer cert not trusted", zap.Error(err))
+			h.sendFail(c, msg, sceppkg.BadRequest)
+			return
+		}
+		username = signerCert.Subject.CommonName
+		oldCertSerial = signerCert.SerialNumber
+		h.log.Info("scep: renewal request", zap.String("username", username), zap.String("old_serial", oldCertSerial.String()))
 	}
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: msg.CSRReqMessage.CSR.Raw})
@@ -151,17 +204,84 @@ func (h *Handler) pkiOperation(c *gin.Context) {
 		return
 	}
 
-	serial := issuedCert.SerialNumber.String()
-	h.log.Info("scep: certificate issued", zap.String("username", username), zap.String("serial", serial))
+	newSerial := issuedCert.SerialNumber.String()
+	h.log.Info("scep: certificate issued", zap.String("username", username), zap.String("serial", newSerial))
 
 	if h.deviceMap != nil {
-		info := devicemap.DeviceInfo{DeviceName: deviceName, Platform: "ios", EnrolledAt: time.Now()}
-		if err := h.deviceMap.Set(c.Request.Context(), serial, info); err != nil {
-			h.log.Error("scep: failed to record device info", zap.String("serial", serial), zap.Error(err))
+		now := time.Now()
+		info := devicemap.DeviceInfo{
+			Username:   username,
+			DeviceName: deviceName,
+			Platform:   platform,
+			IsSCEP:     true,
+			EnrolledAt: now,
+			ExpiresAt:  issuedCert.NotAfter,
+		}
+		if oldCertSerial != nil {
+			prev, err := h.deviceMap.Replace(c.Request.Context(), oldCertSerial.String(), newSerial, info)
+			if err != nil {
+				h.log.Error("scep: failed to update device map on renewal", zap.String("serial", newSerial), zap.Error(err))
+			}
+			// Carry forward metadata the renewal request didn't supply.
+			if info.DeviceName == "" {
+				info.DeviceName = prev.DeviceName
+			}
+			if info.Platform == "" {
+				info.Platform = prev.Platform
+			}
+			if !prev.EnrolledAt.IsZero() {
+				info.EnrolledAt = prev.EnrolledAt
+			}
+			info.LastRenewedAt = now
+			if err := h.deviceMap.Set(c.Request.Context(), newSerial, info); err != nil {
+				h.log.Error("scep: failed to update device info on renewal", zap.String("serial", newSerial), zap.Error(err))
+			}
+		} else if err := h.deviceMap.Set(c.Request.Context(), newSerial, info); err != nil {
+			h.log.Error("scep: failed to record device info", zap.String("serial", newSerial), zap.Error(err))
+		}
+	}
+
+	if oldCertSerial != nil {
+		if !oldCertSerial.IsInt64() {
+			h.log.Error("scep: old cert serial too large for int64, skipping revocation", zap.String("serial", oldCertSerial.String()))
+		} else if err := h.ipaClient.CertRevoke(oldCertSerial.Int64(), h.caName, 0); err != nil {
+			h.log.Error("scep: failed to revoke old cert during renewal", zap.String("serial", oldCertSerial.String()), zap.Error(err))
+		} else {
+			h.log.Info("scep: revoked old cert during renewal", zap.String("serial", oldCertSerial.String()))
 		}
 	}
 
 	c.Data(http.StatusOK, "application/x-pki-message", resp.Raw)
+}
+
+// clientCertFromSCEPMessage returns the first non-CA certificate embedded in the
+// SCEP message's outer CMS SignedData — the signer cert for PKCSReq/RenewalReq.
+// Re-parsing msg.Raw is necessary because the scep library does not expose p7.Certificates.
+func clientCertFromSCEPMessage(raw []byte) (*x509.Certificate, error) {
+	p7, err := pkcs7.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("parse pkcs7: %w", err)
+	}
+	for _, cert := range p7.Certificates {
+		if !cert.IsCA {
+			return cert, nil
+		}
+	}
+	return nil, errors.New("no client certificate found in SCEP message")
+}
+
+// verifyWiFiCert checks that cert was issued by the WiFi CA chain.
+func (h *Handler) verifyWiFiCert(cert *x509.Certificate) error {
+	roots := x509.NewCertPool()
+	roots.AddCert(h.rootCA)
+	intermediates := x509.NewCertPool()
+	intermediates.AddCert(h.wifiCA)
+	_, err := cert.Verify(x509.VerifyOptions{
+		Roots:         roots,
+		Intermediates: intermediates,
+		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	})
+	return err
 }
 
 func (h *Handler) sendFail(c *gin.Context, msg *sceppkg.PKIMessage, info sceppkg.FailInfo) {

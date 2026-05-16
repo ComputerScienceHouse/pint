@@ -1,0 +1,261 @@
+<!-- templates/devices.html -->
+{{template "layout.html" .}}
+{{define "title"}}My Devices{{end}}
+{{define "content"}}
+<style>
+.device-card {
+  border: 1px solid var(--pint-border);
+  border-left-width: 3px;
+  border-radius: .5rem;
+  background: var(--pint-surface);
+  margin-bottom: .875rem;
+  overflow: hidden;
+}
+
+.device-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .65rem 1.25rem;
+  border-bottom: 1px solid var(--pint-border);
+  background: var(--pint-alt-header-bg);
+}
+
+.device-name {
+  font-size: .875rem;
+  font-weight: 700;
+  color: var(--pint-text);
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+
+.device-name .mdi {
+  color: var(--platform-color, var(--pint-muted-strong));
+  font-size: 1.1em;
+}
+
+.device-card-body {
+  padding: .875rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.device-meta {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.device-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+
+.device-meta-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--pint-muted-strong);
+}
+
+.device-meta-value {
+  font-size: .85rem;
+  color: var(--pint-text);
+}
+
+.platform-ios     { --platform-color: var(--bs-primary); border-left-color: var(--bs-primary); }
+.platform-android { --platform-color: var(--bs-success); border-left-color: var(--bs-success); }
+.platform-windows { --platform-color: #6c757d;           border-left-color: #6c757d; }
+.platform-linux   { --platform-color: var(--bs-info);    border-left-color: var(--bs-info); }
+.platform-unknown { --platform-color: var(--bs-warning); border-left-color: var(--bs-warning); }
+
+.cert-expired {
+  --platform-color: var(--pint-muted-strong);
+  border-left-color: var(--pint-muted-strong) !important;
+  opacity: .7;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes deviceFadeUp {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .device-card { animation: deviceFadeUp .2s ease both; }
+  .device-card:nth-of-type(1) { animation-delay: .04s; }
+  .device-card:nth-of-type(2) { animation-delay: .08s; }
+  .device-card:nth-of-type(3) { animation-delay: .12s; }
+  .device-card:nth-of-type(4) { animation-delay: .16s; }
+  .device-card:nth-of-type(5) { animation-delay: .20s; }
+}
+</style>
+
+<h1 class="page-title">My Devices</h1>
+
+{{if .FlashSuccess}}
+<div class="alert alert-success alert-dismissible fade show mb-3" role="alert">
+  <span class="mdi mdi-check-circle-outline me-1"></span> {{.FlashSuccess}}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{{end}}
+{{if .FlashError}}
+<div class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+  <span class="mdi mdi-alert-circle-outline me-1"></span> {{.FlashError}}
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{{end}}
+
+{{if and (not .Devices) (not .ExpiredDevices)}}
+<div class="text-center py-5 text-muted">
+  <span class="mdi mdi-devices" style="font-size:2.5rem; display:block; margin-bottom:.5rem;"></span>
+  No enrolled devices found. <a href="/profile">Download a WiFi profile</a> to get started.
+</div>
+{{else}}
+<p class="text-muted mb-3" style="font-size:.875rem;">
+  These are the WiFi certificates issued to your account. Revoke a certificate to disconnect that device.
+</p>
+
+{{range .Devices}}
+{{template "device-card" .}}
+{{end}}
+
+{{if .ExpiredDevices}}
+<div class="mt-3">
+  <button class="btn btn-sm btn-outline-secondary" type="button"
+          data-bs-toggle="collapse" data-bs-target="#expiredCerts"
+          aria-expanded="false" aria-controls="expiredCerts">
+    <span class="mdi mdi-chevron-down me-1"></span>
+    Show expired certificates ({{len .ExpiredDevices}})
+  </button>
+  <div class="collapse mt-3" id="expiredCerts">
+    {{range .ExpiredDevices}}
+    {{template "device-card" .}}
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{end}}
+
+<!-- Revoke confirmation modal -->
+<div class="modal fade" id="revokeModal" tabindex="-1" aria-labelledby="revokeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="revokeModalLabel">Revoke certificate?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-1">This will immediately revoke the WiFi certificate for <strong id="revokeDeviceName"></strong>.</p>
+        <p class="text-muted small mb-0">The device will lose network access and will need a new certificate to reconnect.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="revokeConfirm">
+          <span class="mdi mdi-cancel me-1"></span> Revoke
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden form submitted by the modal -->
+<form id="revokeForm" method="POST" action="/devices/revoke" style="display:none;">
+  <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+  <input type="hidden" name="serial" id="revokeSerial">
+</form>
+
+{{end}}
+{{define "scripts"}}
+<script>
+let _revokeModal = null;
+
+function confirmRevoke(serial, deviceName) {
+    document.getElementById('revokeSerial').value = serial;
+    document.getElementById('revokeDeviceName').textContent = deviceName;
+    if (!_revokeModal) {
+        _revokeModal = new bootstrap.Modal(document.getElementById('revokeModal'));
+    }
+    _revokeModal.show();
+}
+
+document.getElementById('revokeConfirm').addEventListener('click', () => {
+    document.getElementById('revokeForm').submit();
+});
+
+document.getElementById('expiredCerts')?.addEventListener('show.bs.collapse', function() {
+    const btn = document.querySelector('[data-bs-target="#expiredCerts"]');
+    if (btn) btn.querySelector('.mdi').classList.replace('mdi-chevron-down', 'mdi-chevron-up');
+});
+document.getElementById('expiredCerts')?.addEventListener('hide.bs.collapse', function() {
+    const btn = document.querySelector('[data-bs-target="#expiredCerts"]');
+    if (btn) btn.querySelector('.mdi').classList.replace('mdi-chevron-up', 'mdi-chevron-down');
+});
+</script>
+{{end}}
+{{define "device-card"}}
+{{$platformClass := "platform-unknown"}}
+{{if eq .Platform "ios"}}{{$platformClass = "platform-ios"}}{{else if eq .Platform "android"}}{{$platformClass = "platform-android"}}{{else if eq .Platform "windows"}}{{$platformClass = "platform-windows"}}{{else if eq .Platform "linux"}}{{$platformClass = "platform-linux"}}{{end}}
+{{$platformIcon := "mdi-help-circle-outline"}}
+{{if eq .Platform "ios"}}{{$platformIcon = "mdi-apple"}}{{else if eq .Platform "android"}}{{$platformIcon = "mdi-android"}}{{else if eq .Platform "windows"}}{{$platformIcon = "mdi-microsoft-windows"}}{{else if eq .Platform "linux"}}{{$platformIcon = "mdi-linux"}}{{end}}
+<div class="device-card {{$platformClass}}{{if .IsExpired}} cert-expired{{end}}">
+  <div class="device-card-head">
+    <div class="device-name">
+      <span class="mdi {{$platformIcon}}"></span>
+      {{if .DeviceName}}{{.DeviceName}}{{else}}<em class="text-muted fw-normal">Unknown device</em>{{end}}
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      {{if .IsExpired}}
+      <span class="badge bg-secondary"><span class="mdi mdi-clock-alert-outline me-1"></span>Expired</span>
+      {{else}}
+      <span class="badge bg-success">Active</span>
+      {{if .IsSCEP}}<span class="badge bg-info" title="This certificate was issued via SCEP and will renew automatically when your device reconnects."><span class="mdi mdi-refresh me-1"></span>Auto-renews with SCEP</span>{{end}}
+      {{end}}
+    </div>
+  </div>
+  <div class="device-card-body">
+    <div class="device-meta">
+      {{if .Platform}}
+      <div class="device-meta-item">
+        <span class="device-meta-label">Platform</span>
+        <span class="device-meta-value">{{.Platform}}</span>
+      </div>
+      {{end}}
+      {{if .HasMapInfo}}
+      <div class="device-meta-item">
+        <span class="device-meta-label">Enrolled</span>
+        <span class="device-meta-value">{{.EnrolledAt.Format "Jan 2, 2006"}}</span>
+      </div>
+      {{end}}
+      {{if not .LastRenewedAt.IsZero}}
+      <div class="device-meta-item">
+        <span class="device-meta-label">Last Renewed</span>
+        <span class="device-meta-value">{{.LastRenewedAt.Format "Jan 2, 2006"}}</span>
+      </div>
+      {{end}}
+      {{if not .ExpiresAt.IsZero}}
+      <div class="device-meta-item">
+        <span class="device-meta-label">Cert Expires</span>
+        <span class="device-meta-value">{{.ExpiresAt.Format "Jan 2, 2006"}}</span>
+      </div>
+      {{end}}
+      <div class="device-meta-item">
+        <span class="device-meta-label">Serial</span>
+        <span class="device-meta-value" style="font-family: monospace; font-size:.75rem;">{{.Serial}}</span>
+      </div>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-danger"
+            data-serial="{{.Serial}}"
+            data-device-name="{{if .DeviceName}}{{.DeviceName}}{{else}}Unknown device{{end}}"
+            onclick="confirmRevoke(this.dataset.serial, this.dataset.deviceName)">
+      <span class="mdi mdi-cancel me-1"></span> Revoke
+    </button>
+  </div>
+</div>
+{{end}}

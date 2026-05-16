@@ -37,3 +37,10 @@ type certRequestResult struct {
 type caShowResult struct {
 	Certificate string `json:"certificate"`
 }
+
+// CertInfo is one entry returned by cert_find.
+type CertInfo struct {
+	SerialNumber  int64  `json:"serial_number"`
+	ValidNotAfter string `json:"valid_not_after"`
+	Revoked       bool   `json:"revoked"`
+}
