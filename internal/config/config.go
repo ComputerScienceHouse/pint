@@ -61,6 +61,12 @@ type Config struct {
 
 	// Dev
 	DisableOIDC bool // PINT_DISABLE_OIDC: skip OIDC and inject a static dev user
+
+	// Migration
+	// EAPMigrateLegacyLeaf: when true, the EAP cert watcher appends the WiFi CA chain to
+	// leaf-only existing certs without reissuing (one-shot migration for legacy deployments).
+	// Set PINT_EAP_MIGRATE_LEGACY_LEAF=true, run once, then unset. TODO: remove after 2026-12-01.
+	EAPMigrateLegacyLeaf bool
 }
 
 func Load() (*Config, error) {
@@ -107,6 +113,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg.DisableOIDC = os.Getenv("PINT_DISABLE_OIDC") == "true"
+	cfg.EAPMigrateLegacyLeaf = os.Getenv("PINT_EAP_MIGRATE_LEGACY_LEAF") == "true"
 	cfg.IPASkipTLSVerify = os.Getenv("PINT_IPA_SKIP_TLS_VERIFY") == "true"
 	cfg.RadSecCheckCRL = os.Getenv("PINT_RADIUS_RADSEC_CHECK_CRL") != "false"
 	cfg.RadSecProxyProtocol = os.Getenv("PINT_RADIUS_RADSEC_PROXY_PROTOCOL") == "true"

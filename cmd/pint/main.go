@@ -3,36 +3,35 @@ package main
 
 import (
 	"context"
-	"crypto/rsa"
-	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
+	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
+	"github.com/ComputerScienceHouse/pint/internal/certmgr"
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/devicemap"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
 	"github.com/ComputerScienceHouse/pint/internal/logger"
-	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	internscep "github.com/ComputerScienceHouse/pint/internal/scep"
+	pintemplates "github.com/ComputerScienceHouse/pint/templates"
 	"github.com/gin-contrib/multitemplate"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
-
-const radSecRenewBefore = 30 * 24 * time.Hour
 
 func main() {
 	log, err := logger.New()
@@ -47,14 +46,18 @@ func main() {
 		log.Fatal("config load failed", zap.Error(err))
 	}
 
-	// FreeIPA client: authenticate at startup
+	// Signal context for graceful shutdown — propagated to certmgr, http server, and challenge store.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// FreeIPA client: authenticate at startup.
 	ipaClient := freeipa.New(cfg.IPAHost, cfg.IPAPrincipal, cfg.IPAPassword, cfg.IPASkipTLSVerify)
 	if err := ipaClient.Login(); err != nil {
 		log.Fatal("freeipa login failed", zap.Error(err))
 	}
 	log.Info("freeipa authenticated", zap.String("host", cfg.IPAHost), zap.String("principal", cfg.IPAPrincipal))
 
-	// Kubernetes client: try in-cluster first, fall back to kubeconfig
+	// Kubernetes client: try in-cluster first, fall back to kubeconfig.
 	restCfg, err := rest.InClusterConfig()
 	if err != nil {
 		restCfg, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
@@ -75,40 +78,38 @@ func main() {
 		metricsClient = nil
 	}
 
-	// Initialize RADIUS secrets with empty content if they don't exist yet.
-	if err := radius.EnsureConfigSecret(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret); err != nil {
+	// Initialize RADIUS secrets with safe defaults if they don't exist yet.
+	if err := radius.EnsureConfigSecret(ctx, k8sClient, cfg.Namespace, cfg.ConfigSecret); err != nil {
 		log.Fatal("init radius secrets failed", zap.Error(err))
 	}
 
-	// Ensure FreeRADIUS status server is configured.
-	statusSecret, err := radius.EnsureStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret)
+	statusSecret, err := radius.EnsureStatusConfig(ctx, k8sClient, cfg.Namespace, cfg.ConfigSecret)
 	if err != nil {
 		log.Fatal("ensure status secret failed", zap.Error(err))
 	}
 	statusConf := radius.RenderStatusConfig(statusSecret, "0.0.0.0/0")
-	if err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, statusConf); err != nil {
+	if err := radius.WriteStatusConfig(ctx, k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, statusConf); err != nil {
 		log.Fatal("write status config failed", zap.Error(err))
 	}
-
-	if err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, cfg.RadSecCheckCRL, cfg.RadSecProxyProtocol); err != nil {
+	if err := radius.WriteRadSecTLS(ctx, k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, cfg.RadSecCheckCRL, cfg.RadSecProxyProtocol); err != nil {
 		log.Fatal("write radsec-tls.conf failed", zap.Error(err))
 	}
 
-	// Fetch CA certs in parallel. Code-signing CA is fetched only when configured.
+	// Fetch CA certs in parallel.
 	var (
-		caDER              []byte
-		radSecCACertDER    []byte
-		rootCACertDER      []byte
+		caDER                []byte
+		radSecCACertDER      []byte
+		rootCACertDER        []byte
 		codeSigningCACertDER []byte
-		certErr            [3]error
+		caErr                [3]error
 	)
 	var wg sync.WaitGroup
 	wg.Add(3)
-	go func() { defer wg.Done(); caDER, certErr[0] = ipaClient.CAShow(cfg.IPAWirelessCAName) }()
-	go func() { defer wg.Done(); radSecCACertDER, certErr[1] = ipaClient.CAShow(cfg.RadSecCAName) }()
-	go func() { defer wg.Done(); rootCACertDER, certErr[2] = ipaClient.CAShow(cfg.RootCAName) }()
+	go func() { defer wg.Done(); caDER, caErr[0] = ipaClient.CAShow(cfg.IPAWirelessCAName) }()
+	go func() { defer wg.Done(); radSecCACertDER, caErr[1] = ipaClient.CAShow(cfg.RadSecCAName) }()
+	go func() { defer wg.Done(); rootCACertDER, caErr[2] = ipaClient.CAShow(cfg.RootCAName) }()
 	wg.Wait()
-	for i, e := range certErr {
+	for i, e := range caErr {
 		if e != nil {
 			log.Fatal("freeipa ca_show failed", zap.Int("index", i), zap.Error(e))
 		}
@@ -121,24 +122,11 @@ func main() {
 		}
 	}
 
-	logCACert := func(name string, der []byte) {
-		cert, err := x509.ParseCertificate(der)
-		if err != nil {
-			log.Warn("CA cert parse failed", zap.String("ca", name), zap.Int("bytes", len(der)), zap.Error(err))
-			return
-		}
-		remaining := time.Until(cert.NotAfter).Truncate(time.Hour)
-		log.Info("CA cert loaded",
-			zap.String("ca", name),
-			zap.String("valid_until", cert.NotAfter.Format("2006-01-02")),
-			zap.String("remaining", formatDuration(remaining)),
-		)
-	}
-	logCACert("WiFi CA", caDER)
-	logCACert("RadSec CA", radSecCACertDER)
-	logCACert("Root CA", rootCACertDER)
+	logCACert(log, "WiFi CA", caDER)
+	logCACert(log, "RadSec CA", radSecCACertDER)
+	logCACert(log, "Root CA", rootCACertDER)
 	if len(codeSigningCACertDER) > 0 {
-		logCACert("Code Signing CA", codeSigningCACertDER)
+		logCACert(log, "Code Signing CA", codeSigningCACertDER)
 	}
 
 	radSecCAChainPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: radSecCACertDER})) +
@@ -148,45 +136,55 @@ func main() {
 		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootCACertDER})...,
 	)
 
-	// Load or renew FreeRADIUS outer RadSec TLS cert (RadSec CA-issued; verified by routers)
-	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM)); err != nil {
-		log.Fatal("radsec server cert failed", zap.Error(err))
-	}
-
-	// Load or renew FreeRADIUS EAP-TLS server cert (wireless CA-issued; verified by iOS devices)
-	if err := loadOrRenewEAPServerCert(context.Background(), log, k8sClient, ipaClient, cfg, wifiCAPEM); err != nil {
-		log.Fatal("eap server cert failed", zap.Error(err))
-	}
-
-	// Background watchers: renew certs before expiry and reload FreeRADIUS
-	go watchRadSecServerCert(log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM))
-	go watchEAPServerCert(log, k8sClient, ipaClient, cfg, wifiCAPEM)
-
-	// Load or generate the SCEP RA cert (self-signed RSA, stored in K8s secret).
-	scepRACert, scepRAKey, scepRACertDER, err := loadOrGenerateSCEPRACert(context.Background(), log, k8sClient, cfg)
+	// Load or generate the SCEP RA cert (self-signed RSA, no renewal watcher needed).
+	scepRACert, scepRAKey, scepRACertDER, err := loadOrGenerateSCEPRACert(ctx, log, k8sClient, cfg)
 	if err != nil {
 		log.Fatal("scep RA cert init failed", zap.Error(err))
 	}
 	log.Info("scep RA cert loaded", zap.String("subject", scepRACert.Subject.CommonName), zap.String("expires", scepRACert.NotAfter.Format("2006-01-02")))
 
-	challengeStore := internscep.NewChallengeStore()
-	dm := devicemap.New(k8sClient, cfg.Namespace, cfg.DeviceMapSecret)
+	// Build the application server.
+	srv := &handlers.Server{
+		Log:     log,
+		Cfg:     cfg,
+		IPA:     ipaClient,
+		K8s:     k8sClient,
+		Metrics: metricsClient,
+		DM:      devicemap.New(k8sClient, cfg.Namespace, cfg.DeviceMapSecret),
+		CA: handlers.CABundle{
+			WiFiCACertDER:        caDER,
+			RootCACertDER:        rootCACertDER,
+			CodeSigningCACertDER: codeSigningCACertDER,
+			SCEPRACertDER:        scepRACertDER,
+			RadSecCAChainPEM:     radSecCAChainPEM,
+		},
+	}
+	srv.Challenges = internscep.NewChallengeStore()
 
-	// Load or request the profile signing cert when code signing is configured.
-	var appleSigner *profile.Signer
+	// Cert manager: single goroutine handles all certs with jitter, context-aware shutdown.
+	mgr := certmgr.New(log, k8sClient)
+	mgr.Register(newRadSecServerCert(log, ipaClient, cfg, k8sClient, []byte(radSecCAChainPEM)))
+	mgr.Register(newEAPServerCert(log, ipaClient, cfg, k8sClient, wifiCAPEM))
 	if cfg.CodeSigningCAName != "" {
-		signer, renewed, err := loadOrRenewProfileSigningCert(context.Background(), log, k8sClient, ipaClient, cfg, codeSigningCACertDER)
-		if err != nil {
-			log.Fatal("profile signing cert failed", zap.Error(err))
+		mgr.Register(newProfileSigningCert(log, ipaClient, cfg, k8sClient, codeSigningCACertDER, srv))
+	}
+	if err := mgr.RunOnce(ctx); err != nil {
+		log.Fatal("cert manager startup failed", zap.Error(err))
+	}
+	go mgr.Watch(ctx)
+
+	// If profile signing is enabled, load the initial signer from the K8s secret.
+	// The certmgr will hot-swap it on renewal via profileSigningCert.AfterRenew.
+	if cfg.CodeSigningCAName != "" {
+		if secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.ProfileSigningCertSecret, metav1.GetOptions{}); err == nil {
+			if signer, err := profileSignerFromPEM(secret.Data["tls.crt"], secret.Data["tls.key"], codeSigningCACertDER); err == nil {
+				srv.Signer.Store(signer)
+				log.Info("apple profile signing enabled", zap.String("subject", signer.Cert.Subject.CommonName))
+			}
 		}
-		if renewed {
-			log.Info("issued new profile signing cert")
-		}
-		appleSigner = signer
-		log.Info("apple profile signing enabled", zap.String("subject", signer.Cert.Subject.CommonName))
-		go watchProfileSigningCert(log, k8sClient, ipaClient, cfg, codeSigningCACertDER)
 	}
 
+	// Router setup.
 	if cfg.DisableOIDC {
 		gin.SetMode(gin.DebugMode)
 	} else {
@@ -223,346 +221,54 @@ func main() {
 	}
 
 	// SCEP public routes — iOS calls these without a session cookie.
-	scepHandler, err := internscep.NewHandler(log, challengeStore, ipaClient, dm, cfg.IPAWirelessCAName, cfg.IPACertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
+	scepHandler, err := internscep.NewHandler(log, srv.Challenges, ipaClient, srv.DM, cfg.IPAWirelessCAName, cfg.IPACertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
 	if err != nil {
 		log.Fatal("scep handler init failed", zap.Error(err))
 	}
 	scepHandler.Register(r)
 
-	// Public routes
-	r.GET("/", handlers.IndexHandler(cfg.LoginURL))
+	srv.Routes(r, authMiddleware)
 
-	// Protected routes
-	protected := r.Group("/")
-	protected.Use(authMiddleware)
-	protected.Use(handlers.RequireAuth(cfg.LoginURL))
-	protected.Use(handlers.CSRFMiddleware())
-	{
-		protected.GET("/dashboard", handlers.DashboardHandler())
-		protected.GET("/profile", handlers.ProfilePageHandler(cfg))
-		protected.POST("/profile/generate", handlers.GenerateProfileHandler(log, ipaClient, cfg, caDER, rootCACertDER, codeSigningCACertDER, scepRACertDER, challengeStore, appleSigner, dm))
-		protected.GET("/profile/ca", handlers.CAHandler(caDER))
-		protected.GET("/profile/scep-challenge", handlers.SCEPChallengeHandler(log, challengeStore))
-		protected.GET("/devices", handlers.DevicesPageHandler(log, ipaClient, cfg, dm))
-		protected.POST("/devices/revoke", handlers.RevokeDeviceHandler(log, ipaClient, cfg, dm))
-		protected.GET("/radius", handlers.RadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/secret", handlers.SaveSecretHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/regenerate", handlers.RegenerateHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
-		protected.POST("/radius/update-ip", handlers.UpdateIPHandler(log, cfg, k8sClient))
-		protected.POST("/radius/delete", handlers.DeleteSecretHandler(log, cfg, k8sClient, ipaClient))
-		protected.GET("/radius/ca", handlers.RadSecCAHandler(radSecCAChainPEM))
-
-		protected.GET("/status", handlers.StatusPageHandler(cfg, k8sClient, metricsClient))
-		protected.POST("/status/reload", handlers.ReloadHandler(log, cfg, k8sClient))
-
-		admin := protected.Group("/admin")
-		admin.Use(handlers.RequireRTP)
-		{
-			admin.GET("/devices", handlers.AdminDevicesPageHandler(log, dm))
-			admin.POST("/devices/revoke", handlers.AdminRevokeDeviceHandler(log, ipaClient, cfg, dm))
-			admin.GET("/radius", handlers.AdminRadiusPageHandler(cfg, k8sClient, radSecCAChainPEM))
-			admin.POST("/radius/delete", handlers.AdminDeleteHandler(log, cfg, k8sClient, ipaClient))
-			admin.POST("/radius/regenerate", handlers.AdminRegenerateHandler(log, ipaClient, cfg, k8sClient))
-			admin.POST("/radius/root/provision", handlers.AdminRootProvisionHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
-			admin.POST("/radius/root/regenerate", handlers.AdminRootRegenerateHandler(log, ipaClient, cfg, k8sClient, radSecCAChainPEM))
-			admin.POST("/radius/root/update-ip", handlers.AdminRootUpdateIPHandler(log, cfg, k8sClient))
-		}
+	// HTTP server with explicit timeouts and graceful shutdown.
+	httpSrv := &http.Server{
+		Addr:              ":8080",
+		Handler:           r,
+		ReadHeaderTimeout: 15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
+	go func() {
+		<-ctx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := httpSrv.Shutdown(shutCtx); err != nil {
+			log.Error("http server shutdown error", zap.Error(err))
+		}
+		srv.Challenges.Stop()
+	}()
 
 	log.Info("starting PINT", zap.String("addr", ":8080"))
-	if err := r.Run(":8080"); err != nil {
+	if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal("server exited", zap.Error(err))
 	}
+	log.Info("server stopped gracefully")
 }
 
-func formatDuration(d time.Duration) string {
-	if d < 0 {
-		return "EXPIRED"
-	}
-	days := int(d.Hours()) / 24
-	if days >= 365 {
-		return fmt.Sprintf("%dy %dd", days/365, days%365)
-	}
-	return fmt.Sprintf("%dd", days)
-}
-
+// buildTemplates creates the multitemplate renderer from the embedded template FS.
+// Pages are discovered by glob rather than a hardcoded list, so adding a new
+// template file is sufficient — no code change required.
 func buildTemplates() multitemplate.Render {
 	r := multitemplate.New()
-	layout := "templates/layout.html"
-	for _, page := range []string{"index", "dashboard", "profile", "radius", "status", "admin_radius", "devices", "admin_devices"} {
-		r.AddFromFiles(page+".html", layout, "templates/"+page+".html")
+	entries, err := pintemplates.FS.ReadDir(".")
+	if err != nil {
+		panic("template dir read failed: " + err.Error())
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if name == "layout.html" || !strings.HasSuffix(name, ".html") {
+			continue
+		}
+		r.AddFromFS(name, pintemplates.FS, "layout.html", name)
 	}
 	return r
-}
-
-// loadOrRenewRadSecServerCert reads the existing FreeRADIUS TLS cert from the K8s Secret.
-// If it exists and has more than radSecRenewBefore of validity remaining, it is used as-is
-// and renewed is false. Otherwise a new cert is issued and renewed is true.
-func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
-	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.RadSecCertSecret, metav1.GetOptions{})
-	if err == nil {
-		existing := secret.Data["tls.crt"]
-		key := secret.Data["tls.key"]
-		if len(existing) > 0 && len(key) > 0 {
-			block, _ := pem.Decode(existing)
-			if block != nil {
-				cert, parseErr := x509.ParseCertificate(block.Bytes)
-				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
-					log.Info("reusing existing RadSec server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
-					return existing, key, false, nil
-				}
-			}
-		}
-	}
-
-	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
-	if genErr != nil {
-		return nil, nil, false, fmt.Errorf("generate radsec key/csr: %w", genErr)
-	}
-
-	certDER, certErr := ipaClient.CertRequest(cfg.IPAPrincipal, string(csrPEM), cfg.RadSecCAName, cfg.RadSecServerCertProfile)
-	if certErr != nil {
-		return nil, nil, false, fmt.Errorf("cert_request radsec: %w", certErr)
-	}
-
-	newCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
-	if err != nil {
-		return nil, nil, false, fmt.Errorf("marshal radsec ec key: %w", err)
-	}
-	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
-
-	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM, caPEM); writeErr != nil {
-		return nil, nil, false, fmt.Errorf("write radsec cert: %w", writeErr)
-	}
-	log.Info("issued and stored new RadSec server cert")
-	return newCertPEM, newKeyPEM, true, nil
-}
-
-// watchRadSecServerCert runs forever, checking every 24 hours whether the RadSec server
-// cert needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up
-// without a full restart.
-func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM []byte) {
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-	for range ticker.C {
-		ctx := context.Background()
-		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, log, k8sClient, ipaClient, cfg, caPEM)
-		if err != nil {
-			log.Error("radsec cert renewal failed", zap.Error(err))
-			continue
-		}
-		if renewed {
-			log.Info("radsec cert watcher: renewed cert and reloaded freeradius")
-		}
-	}
-}
-
-// loadOrRenewEAPServerCert reads the EAP-TLS server cert (eap.crt/eap.key) from the RadSec
-// cert secret. If the cert is missing or within radSecRenewBefore of expiry, a new one is
-// issued from the wireless CA so that iOS devices can verify it via their mobileconfig anchor.
-func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, wifiCAPEM []byte) error {
-	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.EAPCertSecret, metav1.GetOptions{})
-	if err == nil {
-		existing := secret.Data["eap.crt"]
-		key := secret.Data["eap.key"]
-		if len(existing) > 0 && len(key) > 0 {
-			block, rest := pem.Decode(existing)
-			if block != nil {
-				cert, parseErr := x509.ParseCertificate(block.Bytes)
-				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
-					if len(rest) == 0 {
-						// Leaf-only — append the CA chain without reissuing (RFC 5246 §7.4.2
-						// requires servers to supply intermediates; iOS will not fetch them).
-						log.Info("eap.crt is leaf-only, appending CA chain without reissuing",
-							zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
-						chainPEM := append(existing, wifiCAPEM...)
-						return radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, chainPEM, key, wifiCAPEM)
-					}
-					// iOS 13+ ignores CN for EAP-TLS server identity; a DNS SAN is mandatory.
-					// Reissue if the cert has no DNS SANs so legacy certs are upgraded automatically.
-					if len(cert.DNSNames) == 0 {
-						log.Info("eap.crt has no SAN, reissuing to add DNS SAN (required by iOS 13+)",
-							zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
-					} else {
-						log.Info("reusing existing EAP server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
-						return nil
-					}
-				}
-			}
-		}
-	}
-
-	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname, cfg.IPAServiceHostname)
-	if genErr != nil {
-		return fmt.Errorf("generate eap key/csr: %w", genErr)
-	}
-
-	certDER, certErr := ipaClient.CertRequest(cfg.IPAPrincipal, string(csrPEM), cfg.IPAWirelessCAName, cfg.EAPCertProfile)
-	if certErr != nil {
-		return fmt.Errorf("cert_request eap: %w", certErr)
-	}
-
-	// Concatenate the wireless CA chain so FreeRADIUS sends the full chain during
-	// EAP-TLS. iOS does not fetch intermediates itself; without them in the handshake
-	// it cannot build a path to the anchor embedded in the mobileconfig profile.
-	chainPEM := append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), wifiCAPEM...)
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
-	if err != nil {
-		return fmt.Errorf("marshal eap ec key: %w", err)
-	}
-	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
-
-	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, chainPEM, newKeyPEM, wifiCAPEM); writeErr != nil {
-		return fmt.Errorf("write eap cert: %w", writeErr)
-	}
-	log.Info("issued and stored new EAP server cert")
-	return nil
-}
-
-// watchEAPServerCert runs forever, checking every 24 hours whether the EAP server cert
-// needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up.
-func watchEAPServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, wifiCAPEM []byte) {
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-	for range ticker.C {
-		if err := loadOrRenewEAPServerCert(context.Background(), log, k8sClient, ipaClient, cfg, wifiCAPEM); err != nil {
-			log.Error("eap cert renewal failed", zap.Error(err))
-		}
-	}
-}
-
-const profileSigningRenewBefore = 30 * 24 * time.Hour
-
-// loadOrRenewProfileSigningCert loads the profile signing cert from the K8s Secret when
-// it has more than profileSigningRenewBefore of validity remaining. Otherwise it requests
-// a new cert from FreeIPA, stores it, and returns renewed=true.
-func loadOrRenewProfileSigningCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, codeSigningCACertDER []byte) (*profile.Signer, bool, error) {
-	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.ProfileSigningCertSecret, metav1.GetOptions{})
-	if err == nil {
-		certPEM := secret.Data["tls.crt"]
-		keyPEM := secret.Data["tls.key"]
-		if len(certPEM) > 0 && len(keyPEM) > 0 {
-			block, _ := pem.Decode(certPEM)
-			if block != nil {
-				cert, parseErr := x509.ParseCertificate(block.Bytes)
-				if parseErr == nil && time.Until(cert.NotAfter) > profileSigningRenewBefore {
-					signer, signerErr := profileSignerFromPEM(cert, keyPEM, codeSigningCACertDER)
-					if signerErr == nil {
-						log.Info("reusing existing profile signing cert", zap.String("expires", cert.NotAfter.Format("2006-01-02")))
-						return signer, false, nil
-					}
-				}
-			}
-		}
-	}
-
-	privKey, csrPEM, err := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
-	if err != nil {
-		return nil, false, fmt.Errorf("generate key/csr: %w", err)
-	}
-
-	certDER, err := ipaClient.CertRequest(cfg.IPAPrincipal, string(csrPEM), cfg.CodeSigningCAName, cfg.CodeSigningCertProfile)
-	if err != nil {
-		return nil, false, fmt.Errorf("cert_request (profile signing): %w", err)
-	}
-
-	cert, err := x509.ParseCertificate(certDER)
-	if err != nil {
-		return nil, false, fmt.Errorf("parse profile signing cert: %w", err)
-	}
-
-	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
-	if err != nil {
-		return nil, false, fmt.Errorf("marshal profile signing ec key: %w", err)
-	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
-
-	signingSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: cfg.ProfileSigningCertSecret, Namespace: cfg.Namespace},
-		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
-	}
-	if _, createErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Create(ctx, signingSecret, metav1.CreateOptions{}); createErr != nil {
-		if _, updateErr := k8sClient.CoreV1().Secrets(cfg.Namespace).Update(ctx, signingSecret, metav1.UpdateOptions{}); updateErr != nil {
-			return nil, false, fmt.Errorf("store profile signing cert: %w", updateErr)
-		}
-	}
-
-	signer, err := profileSignerFromPEM(cert, keyPEM, codeSigningCACertDER)
-	if err != nil {
-		return nil, false, fmt.Errorf("build signer: %w", err)
-	}
-	return signer, true, nil
-}
-
-// profileSignerFromPEM builds a profile.Signer from an already-parsed cert and PEM-encoded EC key.
-func profileSignerFromPEM(cert *x509.Certificate, keyPEM, codeSigningCACertDER []byte) (*profile.Signer, error) {
-	block, _ := pem.Decode(keyPEM)
-	if block == nil {
-		return nil, fmt.Errorf("decode key PEM: empty block")
-	}
-	key, err := x509.ParseECPrivateKey(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse EC key: %w", err)
-	}
-	s := &profile.Signer{Cert: cert, Key: key}
-	if len(codeSigningCACertDER) > 0 {
-		codeSigningCA, err := x509.ParseCertificate(codeSigningCACertDER)
-		if err != nil {
-			return nil, fmt.Errorf("parse code signing CA: %w", err)
-		}
-		s.Intermediates = []*x509.Certificate{codeSigningCA}
-	}
-	return s, nil
-}
-
-// loadOrGenerateSCEPRACert loads the self-signed SCEP RA cert from the K8s Secret,
-// generating a new one if absent. Returns the parsed cert, key, and raw DER bytes.
-func loadOrGenerateSCEPRACert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, cfg *config.Config) (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
-	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.SCEPRACertSecret, metav1.GetOptions{})
-	if err == nil {
-		certPEM := secret.Data["tls.crt"]
-		keyPEM := secret.Data["tls.key"]
-		if len(certPEM) > 0 && len(keyPEM) > 0 {
-			cert, key, parseErr := internscep.ParseRACert(certPEM, keyPEM)
-			if parseErr == nil {
-				log.Info("reusing existing SCEP RA cert", zap.String("expires", cert.NotAfter.Format("2006-01-02")))
-				return cert, key, cert.Raw, nil
-			}
-		}
-	}
-
-	cert, key, certPEM, keyPEM, genErr := internscep.GenerateRACert()
-	if genErr != nil {
-		return nil, nil, nil, fmt.Errorf("generate SCEP RA cert: %w", genErr)
-	}
-
-	raSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: cfg.SCEPRACertSecret, Namespace: cfg.Namespace},
-		Data:       map[string][]byte{"tls.crt": certPEM, "tls.key": keyPEM},
-	}
-	if err := radius.UpsertSecret(ctx, k8sClient, raSecret); err != nil {
-		return nil, nil, nil, fmt.Errorf("store SCEP RA cert: %w", err)
-	}
-	log.Info("generated new SCEP RA cert")
-	return cert, key, cert.Raw, nil
-}
-
-// watchProfileSigningCert runs forever, checking daily whether the profile signing cert
-// needs renewal. Renewed certs are stored in K8s; pint picks them up on next restart.
-func watchProfileSigningCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, codeSigningCACertDER []byte) {
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-	for range ticker.C {
-		ctx := context.Background()
-		_, renewed, err := loadOrRenewProfileSigningCert(ctx, log, k8sClient, ipaClient, cfg, codeSigningCACertDER)
-		if err != nil {
-			log.Error("profile signing cert watcher: renewal failed", zap.Error(err))
-			continue
-		}
-		if renewed {
-			log.Info("profile signing cert watcher: renewed cert (takes effect on next restart)")
-		}
-	}
 }

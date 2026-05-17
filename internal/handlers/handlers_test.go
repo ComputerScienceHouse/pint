@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/handlers"
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
 	"github.com/gin-contrib/multitemplate"
@@ -34,11 +35,11 @@ func testAuth(username string) gin.HandlerFunc {
 	}
 }
 
-
 func TestIndexHandler(t *testing.T) {
 	const loginURL = "http://localhost:8080/auth/login"
+	s := &handlers.Server{Cfg: &config.Config{LoginURL: loginURL}}
 	r := gin.New()
-	r.GET("/", handlers.IndexHandler(loginURL))
+	r.GET("/", s.Index)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
@@ -52,9 +53,10 @@ func TestIndexHandler(t *testing.T) {
 }
 
 func TestDashboardHandler(t *testing.T) {
+	s := &handlers.Server{}
 	r := gin.New()
 	r.HTMLRender = testTemplates()
-	r.GET("/dashboard", testAuth("mbillow"), handlers.DashboardHandler())
+	r.GET("/dashboard", testAuth("mbillow"), s.Dashboard)
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequest("GET", "/dashboard", nil))

@@ -3,7 +3,6 @@ package radius
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -98,15 +97,28 @@ func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace
 	})
 }
 
+// patchSecretKey sets a single data key in a Kubernetes Secret using read→modify→Update
+// with retry-on-conflict so concurrent writers from multiple replicas don't clobber each other.
 func patchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string, value []byte) error {
-	p, err := json.Marshal(map[string]interface{}{
-		"data": map[string][]byte{key: value},
-	})
-	if err != nil {
-		return err
+	const maxRetries = 5
+	for range maxRetries {
+		secret, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get secret %s: %w", secretName, err)
+		}
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
+		}
+		secret.Data[key] = value
+		_, err = k8s.CoreV1().Secrets(namespace).Update(ctx, secret, metav1.UpdateOptions{})
+		if err == nil {
+			return nil
+		}
+		if !errors.IsConflict(err) {
+			return fmt.Errorf("update secret %s: %w", secretName, err)
+		}
 	}
-	_, err = k8s.CoreV1().Secrets(namespace).Patch(ctx, secretName, types.MergePatchType, p, metav1.PatchOptions{})
-	return err
+	return fmt.Errorf("patchSecretKey %s/%s: exceeded %d retries on conflict", secretName, key, maxRetries)
 }
 
 // UpsertSecret creates or updates a Kubernetes Secret.

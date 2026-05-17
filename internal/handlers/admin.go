@@ -5,216 +5,184 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
-	"k8s.io/client-go/kubernetes"
 )
 
-const rootUsername = "root"
-
-// AdminRadiusPageHandler serves GET /admin/radius — all enrolled clients, RTP-gated.
-func AdminRadiusPageHandler(cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
-		if err := store.Load(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		data := nav.toMap()
-		data["CSRFToken"] = c.GetString(csrfContextKey)
-		data["CACertPEM"] = caChainPEM
-		data["RootClient"] = store.FindByUsername(rootUsername)
-		data["Clients"] = memberClients(store.All())
-		data["FlashSuccess"] = c.Query("success")
-		data["FlashWarn"] = c.Query("warn")
-		c.HTML(http.StatusOK, "admin_radius.html", data)
+// AdminRadiusPage serves GET /admin/radius — all enrolled clients, RTP-gated.
+func (s *Server) AdminRadiusPage(c *gin.Context) {
+	nav, _ := getNavInfo(c)
+	store := radius.NewClientStore(s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret)
+	if err := store.Load(c.Request.Context()); err != nil {
+		s.fail(c, http.StatusInternalServerError, "failed to load RADIUS config", err)
+		return
 	}
-}
-
-// AdminDeleteHandler serves POST /admin/radius/delete — revokes cert and removes a user's client entry.
-func AdminDeleteHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface, ipaClient *freeipa.Client) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		username := c.PostForm("username")
-		if username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
-			return
-		}
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
-		if err := store.Load(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		revokeExistingCert(log, ipaClient, store.FindByUsername(username), cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
-		store.Delete(username)
-		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
-		if err != nil {
-			return
-		}
-		log.Info("admin: radius credentials deleted", zap.String("target", username))
-		c.Redirect(http.StatusFound, adminRadiusRedirect(username+" removed", reloadWarn))
-	}
-}
-
-// AdminRegenerateHandler serves POST /admin/radius/regenerate — reissues credentials for any user.
-func AdminRegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		username := c.PostForm("username")
-		if username == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "username required"})
-			return
-		}
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
-		if err := store.Load(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		existing := store.FindByUsername(username)
-		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
-		entry, _, _, err := issueClientCredentials(ipaClient, cfg, username, username)
-		if err != nil {
-			log.Error("admin: credential regeneration failed", zap.String("target", username), zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if existing != nil {
-			entry.IPCIDR = existing.IPCIDR
-		}
-		store.Upsert(*entry)
-		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
-		if err != nil {
-			return
-		}
-		log.Info("admin: radius credentials regenerated", zap.String("target", username), zap.String("serial", entry.CertSerial))
-		c.Redirect(http.StatusFound, adminRadiusRedirect("Credentials regenerated for "+username, reloadWarn))
-	}
-}
-
-// AdminRootProvisionHandler serves POST /admin/radius/root/provision.
-func AdminRootProvisionHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
-		if err := store.Load(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if store.FindByUsername(rootUsername) != nil {
-			c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client already provisioned — use Regenerate to reissue credentials"))
-			return
-		}
-		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername, cfg.IPAPrincipal)
-		if err != nil {
-			log.Error("admin: root client provisioning failed", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		store.Upsert(*entry)
-		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
-		if err != nil {
-			return
-		}
-		log.Info("admin: root radius client provisioned", zap.String("serial", entry.CertSerial))
-		renderRootCredsPage(c, nav, store, entry, keyPEM, certPEM, caChainPEM,
-			"Organization controller provisioned — save credentials now, they will not be shown again",
-			reloadWarn)
-	}
-}
-
-// AdminRootRegenerateHandler serves POST /admin/radius/root/regenerate.
-func AdminRootRegenerateHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, caChainPEM string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		nav, _ := getNavInfo(c)
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
-		if err := store.Load(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		existing := store.FindByUsername(rootUsername)
-		revokeExistingCert(log, ipaClient, existing, cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
-		entry, keyPEM, certPEM, err := issueClientCredentials(ipaClient, cfg, rootUsername, cfg.IPAPrincipal)
-		if err != nil {
-			log.Error("admin: root credential regeneration failed", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		if existing != nil {
-			entry.IPCIDR = existing.IPCIDR
-		}
-		store.Upsert(*entry)
-		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
-		if err != nil {
-			return
-		}
-		log.Info("admin: root radius credentials regenerated", zap.String("serial", entry.CertSerial))
-		renderRootCredsPage(c, nav, store, entry, keyPEM, certPEM, caChainPEM,
-			"Organization controller credentials regenerated — save the new key and cert now",
-			reloadWarn)
-	}
-}
-
-// AdminRootUpdateIPHandler serves POST /admin/radius/root/update-ip.
-func AdminRootUpdateIPHandler(log *zap.Logger, cfg *config.Config, k8s kubernetes.Interface) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
-		if err := store.Load(c.Request.Context()); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		existing := store.FindByUsername(rootUsername)
-		if existing == nil {
-			c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client is not provisioned"))
-			return
-		}
-		ipCIDR, ok := parseIPCIDR(c)
-		if !ok {
-			return
-		}
-		updated := *existing
-		if ipCIDR != "" {
-			updated.IPCIDR = &ipCIDR
-		} else {
-			updated.IPCIDR = nil
-		}
-		store.Upsert(updated)
-		reloadWarn, err := commitStore(c, log, store, k8s, cfg)
-		if err != nil {
-			return
-		}
-		log.Info("admin: root radius source IP updated", zap.String("ip_cidr", ipCIDR))
-		c.Redirect(http.StatusFound, adminRadiusRedirect("Source IP updated for organization controller", reloadWarn))
-	}
-}
-
-// renderRootCredsPage builds and renders the admin_radius.html page with one-time root credentials.
-func renderRootCredsPage(c *gin.Context, nav navInfo, store *radius.ClientStore, entry *radius.RadiusClient, keyPEM, certPEM, caChainPEM, successMsg, reloadWarn string) {
 	data := nav.toMap()
 	data["CSRFToken"] = c.GetString(csrfContextKey)
-	data["CACertPEM"] = caChainPEM
+	data["CACertPEM"] = s.CA.RadSecCAChainPEM
+	data["RootClient"] = store.FindByUsername(rootUsername)
+	data["Clients"] = memberClients(store.All())
+	data["FlashSuccess"] = c.Query("success")
+	data["FlashWarn"] = c.Query("warn")
+	c.HTML(http.StatusOK, "admin_radius.html", data)
+}
+
+// AdminDelete serves POST /admin/radius/delete — revokes cert and removes a user's client entry.
+func (s *Server) AdminDelete(c *gin.Context) {
+	username := c.PostForm("username")
+	if username == "" {
+		s.fail(c, http.StatusBadRequest, "username required", nil)
+		return
+	}
+	store := radius.NewClientStore(s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret)
+	if err := store.Load(c.Request.Context()); err != nil {
+		s.fail(c, http.StatusInternalServerError, "failed to load RADIUS config", err)
+		return
+	}
+	s.revokeExistingCert(store.FindByUsername(username), s.Cfg.RadSecCAName, freeipa.RevocationReasonCessationOfOperation)
+	store.Delete(username)
+	if err := s.commitStore(c, store); err != nil {
+		return
+	}
+	s.log().Info("admin: radius credentials deleted", zap.String("target", username))
+	c.Redirect(http.StatusFound, adminRadiusRedirect(username+" removed", ""))
+}
+
+// AdminRegenerate serves POST /admin/radius/regenerate — reissues credentials for any user.
+func (s *Server) AdminRegenerate(c *gin.Context) {
+	username := c.PostForm("username")
+	if username == "" {
+		s.fail(c, http.StatusBadRequest, "username required", nil)
+		return
+	}
+	store := radius.NewClientStore(s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret)
+	if err := store.Load(c.Request.Context()); err != nil {
+		s.fail(c, http.StatusInternalServerError, "failed to load RADIUS config", err)
+		return
+	}
+	existing := store.FindByUsername(username)
+	s.revokeExistingCert(existing, s.Cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
+	entry, _, _, err := s.issueClientCredentials(username, username)
+	if err != nil {
+		s.fail(c, http.StatusInternalServerError, "admin: credential regeneration failed", err)
+		return
+	}
+	if existing != nil {
+		entry.IPCIDR = existing.IPCIDR
+	}
+	store.Upsert(*entry)
+	if err := s.commitStore(c, store); err != nil {
+		return
+	}
+	s.log().Info("admin: radius credentials regenerated", zap.String("target", username), zap.String("serial", entry.CertSerial))
+	c.Redirect(http.StatusFound, adminRadiusRedirect("Credentials regenerated for "+username, ""))
+}
+
+// AdminRootProvision serves POST /admin/radius/root/provision.
+func (s *Server) AdminRootProvision(c *gin.Context) {
+	nav, _ := getNavInfo(c)
+	store := radius.NewClientStore(s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret)
+	if err := store.Load(c.Request.Context()); err != nil {
+		s.fail(c, http.StatusInternalServerError, "failed to load RADIUS config", err)
+		return
+	}
+	if store.FindByUsername(rootUsername) != nil {
+		c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client already provisioned — use Regenerate to reissue credentials"))
+		return
+	}
+	entry, keyPEM, certPEM, err := s.issueClientCredentials(rootUsername, s.Cfg.IPAPrincipal)
+	if err != nil {
+		s.fail(c, http.StatusInternalServerError, "admin: root client provisioning failed", err)
+		return
+	}
+	store.Upsert(*entry)
+	if err := s.commitStore(c, store); err != nil {
+		return
+	}
+	s.log().Info("admin: root radius client provisioned", zap.String("serial", entry.CertSerial))
+	s.renderRootCredsPage(c, nav, store, entry, keyPEM, certPEM,
+		"Organization controller provisioned — save credentials now, they will not be shown again")
+}
+
+// AdminRootRegenerate serves POST /admin/radius/root/regenerate.
+func (s *Server) AdminRootRegenerate(c *gin.Context) {
+	nav, _ := getNavInfo(c)
+	store := radius.NewClientStore(s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret)
+	if err := store.Load(c.Request.Context()); err != nil {
+		s.fail(c, http.StatusInternalServerError, "failed to load RADIUS config", err)
+		return
+	}
+	existing := store.FindByUsername(rootUsername)
+	s.revokeExistingCert(existing, s.Cfg.RadSecCAName, freeipa.RevocationReasonSuperseded)
+	entry, keyPEM, certPEM, err := s.issueClientCredentials(rootUsername, s.Cfg.IPAPrincipal)
+	if err != nil {
+		s.fail(c, http.StatusInternalServerError, "admin: root credential regeneration failed", err)
+		return
+	}
+	if existing != nil {
+		entry.IPCIDR = existing.IPCIDR
+	}
+	store.Upsert(*entry)
+	if err := s.commitStore(c, store); err != nil {
+		return
+	}
+	s.log().Info("admin: root radius credentials regenerated", zap.String("serial", entry.CertSerial))
+	s.renderRootCredsPage(c, nav, store, entry, keyPEM, certPEM,
+		"Organization controller credentials regenerated — save the new key and cert now")
+}
+
+// AdminRootUpdateIP serves POST /admin/radius/root/update-ip.
+func (s *Server) AdminRootUpdateIP(c *gin.Context) {
+	store := radius.NewClientStore(s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret)
+	if err := store.Load(c.Request.Context()); err != nil {
+		s.fail(c, http.StatusInternalServerError, "failed to load RADIUS config", err)
+		return
+	}
+	existing := store.FindByUsername(rootUsername)
+	if existing == nil {
+		c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client is not provisioned"))
+		return
+	}
+	ipCIDR, ok := parseIPCIDR(c)
+	if !ok {
+		return
+	}
+	updated := *existing
+	if ipCIDR != "" {
+		updated.IPCIDR = &ipCIDR
+	} else {
+		updated.IPCIDR = nil
+	}
+	store.Upsert(updated)
+	if err := s.commitStore(c, store); err != nil {
+		return
+	}
+	s.log().Info("admin: root radius source IP updated", zap.String("ip_cidr", ipCIDR))
+	c.Redirect(http.StatusFound, adminRadiusRedirect("Source IP updated for organization controller", ""))
+}
+
+func (s *Server) renderRootCredsPage(c *gin.Context, nav navInfo, store *radius.ClientStore, entry *radius.RadiusClient, keyPEM, certPEM, successMsg string) {
+	data := nav.toMap()
+	data["CSRFToken"] = c.GetString(csrfContextKey)
+	data["CACertPEM"] = s.CA.RadSecCAChainPEM
 	data["RootClient"] = entry
 	data["RootKeyPEM"] = keyPEM
 	data["RootCertPEM"] = certPEM
 	data["Clients"] = memberClients(store.All())
 	data["FlashSuccess"] = successMsg
-	if reloadWarn != "" {
-		data["FlashWarn"] = "FreeRADIUS reload failed: " + reloadWarn
-	}
 	c.HTML(http.StatusOK, "admin_radius.html", data)
 }
 
-// adminRadiusRedirect builds a redirect URL to /admin/radius with success and optional reload warning.
-func adminRadiusRedirect(success, reloadWarn string) string {
+func adminRadiusRedirect(success, warn string) string {
 	dest := "/admin/radius?success=" + url.QueryEscape(success)
-	if reloadWarn != "" {
-		dest += "&warn=" + url.QueryEscape("FreeRADIUS reload failed: "+reloadWarn)
+	if warn != "" {
+		dest += "&warn=" + url.QueryEscape(warn)
 	}
 	return dest
 }
 
-// memberClients filters out the reserved root username, returning only member-owned clients.
 func memberClients(all []radius.RadiusClient) []radius.RadiusClient {
 	out := make([]radius.RadiusClient, 0, len(all))
 	for _, c := range all {

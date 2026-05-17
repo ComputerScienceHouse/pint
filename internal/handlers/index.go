@@ -8,12 +8,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func IndexHandler(loginURL string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if _, err := c.Cookie(cshauth.CookieName); err == nil {
-			c.Redirect(http.StatusFound, "/dashboard")
-			return
-		}
-		c.Redirect(http.StatusFound, loginURL+"?referer=/dashboard")
+// Index serves GET / — redirects authenticated users to /dashboard.
+func (s *Server) Index(c *gin.Context) {
+	if _, err := c.Cookie(cshauth.CookieName); err == nil {
+		c.Redirect(http.StatusFound, "/dashboard")
+		return
 	}
+	c.Redirect(http.StatusFound, s.Cfg.LoginURL+"?referer=/dashboard")
 }

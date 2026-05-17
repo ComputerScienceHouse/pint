@@ -71,7 +71,9 @@ func (s *ChallengeStore) Validate(challenge string) (username, deviceName, platf
 }
 
 func (s *ChallengeStore) reap() {
-	ticker := time.NewTicker(challengeTTL)
+	// Tick at TTL/4 so entries are cleaned up promptly; ticking at TTL lets entries
+	// live up to ~2×TTL before being evicted.
+	ticker := time.NewTicker(challengeTTL / 4)
 	defer ticker.Stop()
 	for {
 		select {

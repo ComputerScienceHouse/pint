@@ -140,8 +140,8 @@ func (c *Client) CertFind(username, caName string) ([]CertInfo, error) {
 
 // CertRevoke revokes a certificate by serial number.
 // reason follows RFC 5280: 0=unspecified, 4=superseded, 5=cessationOfOperation.
-// Returns nil if the cert was already revoked or not found, so callers can ignore
-// those cases without failing the overall operation.
+// Returns the raw FreeIPA error on failure; callers that want to ignore
+// already-revoked errors should filter RPC error code 4001 themselves.
 func (c *Client) CertRevoke(serial int64, caName string, reason int) error {
 	_, err := c.rpc("cert_revoke", []interface{}{serial}, map[string]interface{}{
 		"revocation_reason": reason,

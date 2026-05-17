@@ -84,13 +84,32 @@ func (s *ClientStore) Load(ctx context.Context) error {
 	return nil
 }
 
-// Save patches the clients.json key in the Kubernetes Secret with the current client list.
+// Save writes the client list to the Kubernetes Secret using read→modify→Update with
+// retry-on-conflict so concurrent writers from multiple replicas don't clobber each other.
 func (s *ClientStore) Save(ctx context.Context) error {
 	data, err := json.Marshal(s.clients)
 	if err != nil {
 		return err
 	}
-	return patchSecretKey(ctx, s.k8s, s.namespace, s.secretName, KeyClientsJSON, data)
+	const maxRetries = 5
+	for range maxRetries {
+		secret, err := s.k8s.CoreV1().Secrets(s.namespace).Get(ctx, s.secretName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("get secret %s: %w", s.secretName, err)
+		}
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
+		}
+		secret.Data[KeyClientsJSON] = data
+		_, err = s.k8s.CoreV1().Secrets(s.namespace).Update(ctx, secret, metav1.UpdateOptions{})
+		if err == nil {
+			return nil
+		}
+		if !errors.IsConflict(err) {
+			return fmt.Errorf("update secret %s: %w", s.secretName, err)
+		}
+	}
+	return fmt.Errorf("save clients: exceeded max retries on conflict")
 }
 
 // Upsert inserts or replaces the entry for client.Username.
