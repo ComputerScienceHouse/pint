@@ -46,34 +46,35 @@ func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, se
 	return Reload(ctx, k8s, namespace, deployment)
 }
 
-// WriteEAPServerCert writes the FreeRADIUS EAP-TLS server cert and key to the named K8s
-// Secret (eap.crt / eap.key) and triggers a FreeRADIUS rollout restart.
-// The EAP cert is issued by the wireless CA so that iOS devices can verify it using the
-// CA anchor embedded in their mobileconfig profile. This is separate from the RadSec cert
-// secret (tls.crt / tls.key), which is the outer RadSec TLS cert verified by routers.
-func WriteEAPServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, certPEM, keyPEM []byte) error {
+// WriteEAPServerCert writes the FreeRADIUS EAP-TLS material to the named K8s Secret
+// and triggers a FreeRADIUS rollout restart:
+//   - eap.crt / eap.key: EAP-TLS server cert (wireless CA-issued; verified by iOS devices)
+//   - wifi-ca.pem: WiFi CA chain; verifies EAP-TLS client certs presented by devices
+func WriteEAPServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, certPEM, keyPEM, wifiCAPEM []byte) error {
 	if err := UpsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
-		Data:       map[string][]byte{"eap.crt": certPEM, "eap.key": keyPEM},
+		Data: map[string][]byte{
+			"eap.crt":     certPEM,
+			"eap.key":     keyPEM,
+			"wifi-ca.pem": wifiCAPEM,
+		},
 	}); err != nil {
 		return err
 	}
 	return Reload(ctx, k8s, namespace, deployment)
 }
 
-// WriteRadSecServerCert writes all FreeRADIUS TLS material to the named K8s Secret
-// and triggers a FreeRADIUS rollout restart:
-//   - tls.crt / tls.key: outer RadSec TLS cert presented to router clients (RadSec CA-issued)
+// WriteRadSecServerCert writes the FreeRADIUS outer RadSec TLS material to the named K8s
+// Secret and triggers a FreeRADIUS rollout restart:
+//   - tls.crt / tls.key: RadSec TLS cert presented to router clients (RadSec CA-issued)
 //   - ca.pem: RadSec CA chain; verifies connecting router client certificates
-//   - wifi-ca.pem: WiFi CA chain; verifies EAP-TLS user client certificates
-func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, certPEM, keyPEM, caPEM, wifiCAPEM []byte) error {
+func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, certPEM, keyPEM, caPEM []byte) error {
 	if err := UpsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
 		Data: map[string][]byte{
-			"tls.crt":     certPEM,
-			"tls.key":     keyPEM,
-			"ca.pem":      caPEM,
-			"wifi-ca.pem": wifiCAPEM,
+			"tls.crt": certPEM,
+			"tls.key": keyPEM,
+			"ca.pem":  caPEM,
 		},
 	}); err != nil {
 		return err

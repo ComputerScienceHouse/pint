@@ -2,7 +2,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
@@ -150,18 +149,18 @@ func main() {
 	)
 
 	// Load or renew FreeRADIUS outer RadSec TLS cert (RadSec CA-issued; verified by routers)
-	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM); err != nil {
+	if _, _, _, err := loadOrRenewRadSecServerCert(context.Background(), log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM)); err != nil {
 		log.Fatal("radsec server cert failed", zap.Error(err))
 	}
 
 	// Load or renew FreeRADIUS EAP-TLS server cert (wireless CA-issued; verified by iOS devices)
-	if err := loadOrRenewEAPServerCert(context.Background(), log, k8sClient, ipaClient, cfg); err != nil {
+	if err := loadOrRenewEAPServerCert(context.Background(), log, k8sClient, ipaClient, cfg, wifiCAPEM); err != nil {
 		log.Fatal("eap server cert failed", zap.Error(err))
 	}
 
 	// Background watchers: renew certs before expiry and reload FreeRADIUS
-	go watchRadSecServerCert(log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM), wifiCAPEM)
-	go watchEAPServerCert(log, k8sClient, ipaClient, cfg)
+	go watchRadSecServerCert(log, k8sClient, ipaClient, cfg, []byte(radSecCAChainPEM))
+	go watchEAPServerCert(log, k8sClient, ipaClient, cfg, wifiCAPEM)
 
 	// Load or generate the SCEP RA cert (self-signed RSA, stored in K8s secret).
 	scepRACert, scepRAKey, scepRACertDER, err := loadOrGenerateSCEPRACert(context.Background(), log, k8sClient, cfg)
@@ -299,7 +298,7 @@ func buildTemplates() multitemplate.Render {
 // loadOrRenewRadSecServerCert reads the existing FreeRADIUS TLS cert from the K8s Secret.
 // If it exists and has more than radSecRenewBefore of validity remaining, it is used as-is
 // and renewed is false. Otherwise a new cert is issued and renewed is true.
-func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
+func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM []byte) (certPEM, keyPEM []byte, renewed bool, err error) {
 	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.RadSecCertSecret, metav1.GetOptions{})
 	if err == nil {
 		existing := secret.Data["tls.crt"]
@@ -310,30 +309,12 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 				cert, parseErr := x509.ParseCertificate(block.Bytes)
 				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
 					log.Info("reusing existing RadSec server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
-
-					// Even when reusing the cert, check that wifi-ca.pem matches the
-					// expected chain. A mismatch means FreeRADIUS will reject EAP-TLS
-					// client certs, so we patch the secret immediately rather than
-					// waiting for the next cert renewal to write it.
-					if stored := secret.Data["wifi-ca.pem"]; !bytes.Equal(stored, wifiCAPEM) {
-						log.Warn("wifi-ca.pem in secret does not match expected CA chain — updating now",
-							zap.Int("stored_bytes", len(stored)),
-							zap.Int("expected_bytes", len(wifiCAPEM)),
-						)
-						if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, existing, key, caPEM, wifiCAPEM); writeErr != nil {
-							log.Error("failed to update wifi-ca.pem in secret", zap.Error(writeErr))
-						} else {
-							log.Info("updated wifi-ca.pem in secret, triggering FreeRADIUS rollout restart")
-						}
-					}
-
 					return existing, key, false, nil
 				}
 			}
 		}
 	}
 
-	// Generate new cert via FreeIPA
 	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
 	if genErr != nil {
 		return nil, nil, false, fmt.Errorf("generate radsec key/csr: %w", genErr)
@@ -351,7 +332,7 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 	}
 	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
-	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM, caPEM, wifiCAPEM); writeErr != nil {
+	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM, caPEM); writeErr != nil {
 		return nil, nil, false, fmt.Errorf("write radsec cert: %w", writeErr)
 	}
 	log.Info("issued and stored new RadSec server cert")
@@ -361,12 +342,12 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 // watchRadSecServerCert runs forever, checking every 24 hours whether the RadSec server
 // cert needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up
 // without a full restart.
-func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM, wifiCAPEM []byte) {
+func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, caPEM []byte) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
 		ctx := context.Background()
-		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, log, k8sClient, ipaClient, cfg, caPEM, wifiCAPEM)
+		_, _, renewed, err := loadOrRenewRadSecServerCert(ctx, log, k8sClient, ipaClient, cfg, caPEM)
 		if err != nil {
 			log.Error("radsec cert renewal failed", zap.Error(err))
 			continue
@@ -380,7 +361,7 @@ func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaC
 // loadOrRenewEAPServerCert reads the EAP-TLS server cert (eap.crt/eap.key) from the RadSec
 // cert secret. If the cert is missing or within radSecRenewBefore of expiry, a new one is
 // issued from the wireless CA so that iOS devices can verify it via their mobileconfig anchor.
-func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config) error {
+func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, wifiCAPEM []byte) error {
 	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.EAPCertSecret, metav1.GetOptions{})
 	if err == nil {
 		existing := secret.Data["eap.crt"]
@@ -414,7 +395,7 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 	}
 	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
-	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM); writeErr != nil {
+	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM, wifiCAPEM); writeErr != nil {
 		return fmt.Errorf("write eap cert: %w", writeErr)
 	}
 	log.Info("issued and stored new EAP server cert")
@@ -423,11 +404,11 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 
 // watchEAPServerCert runs forever, checking every 24 hours whether the EAP server cert
 // needs renewal. On renewal it reloads FreeRADIUS so the new cert is picked up.
-func watchEAPServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config) {
+func watchEAPServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config, wifiCAPEM []byte) {
 	ticker := time.NewTicker(24 * time.Hour)
 	defer ticker.Stop()
 	for range ticker.C {
-		if err := loadOrRenewEAPServerCert(context.Background(), log, k8sClient, ipaClient, cfg); err != nil {
+		if err := loadOrRenewEAPServerCert(context.Background(), log, k8sClient, ipaClient, cfg, wifiCAPEM); err != nil {
 			log.Error("eap cert renewal failed", zap.Error(err))
 		}
 	}
