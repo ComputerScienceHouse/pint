@@ -367,10 +367,13 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 		existing := secret.Data["eap.crt"]
 		key := secret.Data["eap.key"]
 		if len(existing) > 0 && len(key) > 0 {
-			block, _ := pem.Decode(existing)
+			block, rest := pem.Decode(existing)
 			if block != nil {
 				cert, parseErr := x509.ParseCertificate(block.Bytes)
-				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
+				// Also renew if eap.crt is leaf-only (no chain) — FreeRADIUS must send
+				// the full chain so iOS can verify the cert against the mobileconfig anchor.
+				hasChain := len(rest) > 0
+				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore && hasChain {
 					log.Info("reusing existing EAP server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
 					return nil
 				}
@@ -388,14 +391,17 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 		return fmt.Errorf("cert_request eap: %w", certErr)
 	}
 
-	newCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	// Concatenate the wireless CA chain so FreeRADIUS sends the full chain during
+	// EAP-TLS. iOS does not fetch intermediates itself; without them in the handshake
+	// it cannot build a path to the anchor embedded in the mobileconfig profile.
+	chainPEM := append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), wifiCAPEM...)
 	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
 	if err != nil {
 		return fmt.Errorf("marshal eap ec key: %w", err)
 	}
 	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
-	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM, wifiCAPEM); writeErr != nil {
+	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, chainPEM, newKeyPEM, wifiCAPEM); writeErr != nil {
 		return fmt.Errorf("write eap cert: %w", writeErr)
 	}
 	log.Info("issued and stored new EAP server cert")
