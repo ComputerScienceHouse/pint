@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rsa"
 	"crypto/x509"
@@ -317,6 +318,23 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 				cert, parseErr := x509.ParseCertificate(block.Bytes)
 				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
 					log.Info("reusing existing RadSec server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
+
+					// Even when reusing the cert, check that wifi-ca.pem matches the
+					// expected chain. A mismatch means FreeRADIUS will reject EAP-TLS
+					// client certs, so we patch the secret immediately rather than
+					// waiting for the next cert renewal to write it.
+					if stored := secret.Data["wifi-ca.pem"]; !bytes.Equal(stored, wifiCAPEM) {
+						log.Warn("wifi-ca.pem in secret does not match expected CA chain — updating now",
+							zap.Int("stored_bytes", len(stored)),
+							zap.Int("expected_bytes", len(wifiCAPEM)),
+						)
+						if patchErr := radius.PatchSecretKey(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, "wifi-ca.pem", wifiCAPEM); patchErr != nil {
+							log.Error("failed to update wifi-ca.pem in secret", zap.Error(patchErr))
+						} else {
+							log.Info("updated wifi-ca.pem in secret; FreeRADIUS will use the new chain on next reload")
+						}
+					}
+
 					return existing, key, false, nil
 				}
 			}

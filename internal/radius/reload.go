@@ -74,6 +74,11 @@ func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace
 
 // patchSecretKey updates a single key without touching the rest of the secret,
 // avoiding races with other components that may patch different keys concurrently.
+// PatchSecretKey updates a single key in an existing K8s Secret via a merge patch.
+func PatchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string, value []byte) error {
+	return patchSecretKey(ctx, k8s, namespace, secretName, key, value)
+}
+
 func patchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string, value []byte) error {
 	p, err := json.Marshal(map[string]interface{}{
 		"data": map[string][]byte{key: value},
