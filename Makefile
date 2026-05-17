@@ -61,14 +61,19 @@ dev-metrics:
 		-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 	kubectl rollout status deployment/metrics-server -n kube-system --timeout=90s
 
-# Build FreeRADIUS and PINT dev images, load them into kind, and trigger a rollout.
-# Both images are needed: FreeRADIUS runs the RADIUS server; the PINT image
-# provides the radsec-agent sidecar for HAProxy agent-check health probes.
+# Build FreeRADIUS and PINT dev images, load them into kind, apply the chart,
+# and trigger a rollout.  Both images are needed: FreeRADIUS runs the RADIUS
+# server; the PINT image provides the radsec-agent sidecar for HAProxy
+# agent-check health probes.
 dev-freeradius:
 	docker build -t $(FR_IMAGE) dev/freeradius/
 	docker build -t $(PINT_IMAGE) .
 	kind load docker-image $(FR_IMAGE) --name $(CLUSTER)
 	kind load docker-image $(PINT_IMAGE) --name $(CLUSTER)
+	helm upgrade --install pint chart/ \
+		--namespace $(NAMESPACE) \
+		--create-namespace \
+		--values chart/values-dev.yaml
 	kubectl rollout restart deployment/pint-freeradius -n $(NAMESPACE) 2>/dev/null || true
 
 # Create the envSecret K8s Secret from .env.dev so PINT can run in-cluster.
