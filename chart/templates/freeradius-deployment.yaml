@@ -37,19 +37,22 @@ spec:
             - name: pint-radsec
               mountPath: /etc/pint/radsec
               readOnly: true
+            - name: pint-eap
+              mountPath: /etc/pint/eap
+              readOnly: true
       volumes:
         - name: pint-config
           secret:
             secretName: {{ include "pint.secretName.config" . }}
             optional: true
         - name: pint-radsec
-          projected:
+          secret:
+            secretName: {{ include "pint.secretName.radSecCert" . }}
             defaultMode: 0444
-            sources:
-              - secret:
-                  name: {{ include "pint.secretName.radSecCert" . }}
-                  optional: true
-              - secret:
-                  name: {{ include "pint.secretName.eapCert" . }}
-                  optional: true
+            optional: true
+        - name: pint-eap
+          secret:
+            secretName: {{ include "pint.secretName.eapCert" . }}
+            defaultMode: 0444
+            optional: true
 {{- end }}
