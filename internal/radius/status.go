@@ -256,6 +256,7 @@ func GetCertInfo(ctx context.Context, k8s kubernetes.Interface, namespace, secre
 func fetchPodLogs(ctx context.Context, k8s kubernetes.Interface, namespace, podName string) string {
 	tail := int64(logTailLines)
 	stream, err := k8s.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{
+		Container: "freeradius",
 		TailLines: &tail,
 	}).Stream(ctx)
 	if err != nil {
