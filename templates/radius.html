@@ -47,6 +47,7 @@
   font-size: .875rem;
 }
 
+
 .info-item {
   display: flex;
   align-items: center;
@@ -160,7 +161,6 @@
 
 /* Setup state */
 .radius-setup {
-  max-width: 36rem;
   margin-top: .5rem;
 }
 
@@ -168,12 +168,12 @@
 @media (prefers-reduced-motion: no-preference) {
   @keyframes radiusFadeUp {
     from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; }
   }
-  .radius-section:nth-child(1) { animation: radiusFadeUp .2s ease both .04s; }
-  .radius-section:nth-child(2) { animation: radiusFadeUp .2s ease both .08s; }
-  .radius-section:nth-child(3) { animation: radiusFadeUp .2s ease both .12s; }
-  .radius-setup                { animation: radiusFadeUp .2s ease both .04s; }
+  .radius-section:nth-child(1) { animation: radiusFadeUp .2s ease backwards .04s; }
+  .radius-section:nth-child(2) { animation: radiusFadeUp .2s ease backwards .08s; }
+  .radius-section:nth-child(3) { animation: radiusFadeUp .2s ease backwards .12s; }
+  .radius-setup                { animation: radiusFadeUp .2s ease backwards .04s; }
 }
 </style>
 
@@ -358,12 +358,19 @@
       <form method="POST" action="/radius/update-ip">
         <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
         <div class="modal-body">
-          <p class="text-muted mb-3">Set the IP address your router connects from.</p>
+          <p class="text-muted mb-3">Update the public IP your home router uses to connect to the RADIUS server. Only connections from this IP will be accepted.</p>
           <div class="mb-0">
-            <label for="modal-ip-cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="modal-ip-cidr" name="ip_cidr"
-                   placeholder="e.g. 203.0.113.42" required
-                   value="{{.IPCIDR}}">
+            <label for="modal-ip-cidr" class="form-label">Your Router's Public IP Address <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="text" class="form-control" id="modal-ip-cidr" name="ip_cidr"
+                     placeholder="e.g. 203.0.113.42" required
+                     value="{{.IPCIDR}}">
+              <button class="btn btn-outline-secondary" type="button"
+                      onclick="detectMyIP('modal-ip-cidr', this)">
+                <span class="mdi mdi-crosshairs-gps me-1"></span> Detect
+              </button>
+            </div>
+            <div class="form-text">Not your LAN address &mdash; your router's external IP as seen from the internet.</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -425,22 +432,20 @@
 <!-- Setup state: no existing configuration -->
 <div class="radius-setup">
   <h1 class="page-title">Home RadSec</h1>
-  <div class="info-grid mb-4">
-    <span class="info-label">RADIUS Server</span>
-    <span class="info-value"><code>{{.RadiusServer}}</code></span>
-    <span class="info-label">Auth Port</span>
-    <span class="info-value"><code>{{.RadiusPort}}</code></span>
-    <span class="info-label">Protocol</span>
-    <span class="info-value">RadSec (RADIUS over TLS)</span>
-  </div>
   <p class="mb-3" style="font-size:.9rem; color: var(--pint-muted);">Broadcast the CSH WiFi SSID from your home router. PINT will generate a private key and client certificate so your router can authenticate users against the CSH RADIUS server over RadSec.</p>
   <form method="POST" action="/radius/secret">
     <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
     <div class="mb-3">
-      <label for="ip_cidr" class="form-label">Router Source IP <span class="text-danger">*</span></label>
-      <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
-             placeholder="e.g. 203.0.113.42" required>
-      <div class="form-text">Your router's external IP address. Only connections from this IP will be accepted.</div>
+      <label for="ip_cidr" class="form-label">Your Router's Public IP Address <span class="text-danger">*</span></label>
+      <div class="input-group">
+        <input type="text" class="form-control" id="ip_cidr" name="ip_cidr"
+               placeholder="e.g. 203.0.113.42" required>
+        <button class="btn btn-outline-secondary" type="button" id="detect-ip-btn"
+                onclick="detectMyIP('ip_cidr', this)">
+          <span class="mdi mdi-crosshairs-gps me-1"></span> Detect
+        </button>
+      </div>
+      <div class="form-text">The public IP your home router uses to reach the internet &mdash; not your LAN address. Only connections from this IP will be accepted by the RADIUS server.</div>
     </div>
     <button type="submit" class="btn btn-primary"><span class="mdi mdi-key-plus me-1"></span> Generate Credentials</button>
   </form>
@@ -485,6 +490,23 @@ function downloadTA(id, filename) {
   a.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
   a.download = filename;
   a.click();
+}
+
+function detectMyIP(inputId, btn) {
+  const input = document.getElementById(inputId);
+  const icon = btn.querySelector('.mdi');
+  btn.disabled = true;
+  if (icon) { icon.classList.remove('mdi-crosshairs-gps'); icon.classList.add('mdi-loading', 'mdi-spin'); }
+  fetch('https://api.ipify.org?format=json')
+    .then(r => r.json())
+    .then(data => {
+      if (data.ip) input.value = data.ip;
+    })
+    .catch(() => {})
+    .finally(() => {
+      btn.disabled = false;
+      if (icon) { icon.classList.remove('mdi-loading', 'mdi-spin'); icon.classList.add('mdi-crosshairs-gps'); }
+    });
 }
 </script>
 {{end}}

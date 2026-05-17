@@ -19,16 +19,17 @@
   gap: 1.25rem;
 }
 
-.dash-card-primary {
-  border-left-width: 3px;
-  border-left-color: var(--bs-primary);
-}
-
 .dash-card-icon {
-  font-size: 1.75rem;
+  font-size: 1.35rem;
   line-height: 1;
   flex-shrink: 0;
-  margin-top: .125rem;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklch, currentColor 12%, var(--pint-surface));
 }
 
 .dash-card-primary .dash-card-icon { color: var(--bs-primary); }
@@ -56,11 +57,11 @@
 @media (prefers-reduced-motion: no-preference) {
   @keyframes dashFadeUp {
     from { opacity: 0; transform: translateY(5px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; }
   }
-  .page-title          { animation: dashFadeUp .2s ease both; }
-  .dash-card-primary   { animation: dashFadeUp .2s ease both .06s; }
-  .dash-card-secondary { animation: dashFadeUp .2s ease both .12s; }
+  .page-title          { animation: dashFadeUp .2s ease backwards; }
+  .dash-card-primary   { animation: dashFadeUp .2s ease backwards .06s; }
+  .dash-card-secondary { animation: dashFadeUp .2s ease backwards .12s; }
 }
 
 @media (max-width: 480px) {

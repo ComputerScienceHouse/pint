@@ -5,7 +5,6 @@
 <style>
 .profile-section {
   border: 1px solid var(--pint-border);
-  border-left-width: 3px;
   border-radius: .5rem;
   background: var(--pint-surface);
   margin-bottom: 1rem;
@@ -18,7 +17,7 @@
   gap: .45rem;
   padding: .65rem 1.25rem;
   border-bottom: 1px solid var(--pint-border);
-  background: var(--pint-alt-header-bg);
+  background: color-mix(in oklch, var(--platform-color, var(--pint-muted-strong)) 10%, var(--pint-alt-header-bg));
   font-size: .7rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -31,10 +30,10 @@
   font-size: 1em;
 }
 
-.profile-ios   { --platform-color: var(--bs-primary); border-left-color: var(--bs-primary); }
-.profile-android { --platform-color: var(--bs-success); border-left-color: var(--bs-success); }
-.profile-windows { --platform-color: #6c757d;           border-left-color: #6c757d; }
-.profile-linux { --platform-color: var(--bs-info);    border-left-color: var(--bs-info); }
+.profile-ios     { --platform-color: var(--bs-primary); }
+.profile-android { --platform-color: var(--bs-success); }
+.profile-windows { --platform-color: #6c757d; }
+.profile-linux   { --platform-color: var(--bs-info); }
 
 .profile-section-body {
   padding: 1.25rem;
@@ -119,9 +118,9 @@
 @media (prefers-reduced-motion: no-preference) {
   @keyframes profileFadeUp {
     from { opacity: 0; transform: translateY(4px); }
-    to   { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; }
   }
-  .profile-section { animation: profileFadeUp .2s ease both; }
+  .profile-section { animation: profileFadeUp .2s ease backwards; }
   .profile-section:nth-of-type(1) { animation-delay: .04s; }
   .profile-section:nth-of-type(2) { animation-delay: .08s; }
   .profile-section:nth-of-type(3) { animation-delay: .12s; }
