@@ -331,7 +331,10 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 						if patchErr := radius.PatchSecretKey(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, "wifi-ca.pem", wifiCAPEM); patchErr != nil {
 							log.Error("failed to update wifi-ca.pem in secret", zap.Error(patchErr))
 						} else {
-							log.Info("updated wifi-ca.pem in secret; FreeRADIUS will use the new chain on next reload")
+							log.Info("updated wifi-ca.pem in secret, triggering FreeRADIUS rollout restart")
+							if reloadErr := radius.Reload(ctx, k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); reloadErr != nil {
+								log.Warn("FreeRADIUS rollout restart failed after wifi-ca.pem update", zap.Error(reloadErr))
+							}
 						}
 					}
 
