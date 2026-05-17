@@ -70,7 +70,7 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 		"EncryptionType":     "WPA2",
 		"EAPClientConfiguration": map[string]interface{}{
 			"AcceptEAPTypes":               []int{13},
-			"PayloadCertificateAnchorUUID": []string{caUUID},
+			"PayloadCertificateAnchorUUID": []string{caUUID, rootCAUUID},
 			"TLSTrustedServerNames":        []string{p.RadiusHost},
 		},
 		"PayloadCertificateUUID": scepUUID,
