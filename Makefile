@@ -5,6 +5,7 @@ STUB            = freeipa-stub
 CLUSTER         = pint-dev
 NAMESPACE       = pint
 FR_IMAGE        = pint-freeradius:dev
+PINT_IMAGE      = pint:dev
 SMOKETEST_IMAGE = pint-smoketest:dev
 SMOKETEST_POD   = pint-radsec-smoketest
 SCEP_PINT_URL  ?= http://localhost:8080
@@ -60,10 +61,14 @@ dev-metrics:
 		-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 	kubectl rollout status deployment/metrics-server -n kube-system --timeout=90s
 
-# Build FreeRADIUS dev image, load it into kind, and trigger a rollout.
+# Build FreeRADIUS and PINT dev images, load them into kind, and trigger a rollout.
+# Both images are needed: FreeRADIUS runs the RADIUS server; the PINT image
+# provides the radsec-agent sidecar for HAProxy agent-check health probes.
 dev-freeradius:
 	docker build -t $(FR_IMAGE) dev/freeradius/
+	docker build -t $(PINT_IMAGE) .
 	kind load docker-image $(FR_IMAGE) --name $(CLUSTER)
+	kind load docker-image $(PINT_IMAGE) --name $(CLUSTER)
 	kubectl rollout restart deployment/pint-freeradius -n $(NAMESPACE) 2>/dev/null || true
 
 # Create the envSecret K8s Secret from .env.dev so PINT can run in-cluster.
@@ -105,7 +110,7 @@ radsec-smoketest:
 # ── Docker build ───────────────────────────────────────────────────────────────
 
 docker-build:
-	docker build -t pint:dev .
+	docker build -t $(PINT_IMAGE) .
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 
