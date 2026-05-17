@@ -370,10 +370,15 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 			block, rest := pem.Decode(existing)
 			if block != nil {
 				cert, parseErr := x509.ParseCertificate(block.Bytes)
-				// Also renew if eap.crt is leaf-only (no chain) — FreeRADIUS must send
-				// the full chain so iOS can verify the cert against the mobileconfig anchor.
-				hasChain := len(rest) > 0
-				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore && hasChain {
+				if parseErr == nil && time.Until(cert.NotAfter) > radSecRenewBefore {
+					if len(rest) == 0 {
+						// Leaf-only — append the CA chain without reissuing (RFC 5246 §7.4.2
+						// requires servers to supply intermediates; iOS will not fetch them).
+						log.Info("eap.crt is leaf-only, appending CA chain without reissuing",
+							zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
+						chainPEM := append(existing, wifiCAPEM...)
+						return radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, chainPEM, key, wifiCAPEM)
+					}
 					log.Info("reusing existing EAP server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
 					return nil
 				}
