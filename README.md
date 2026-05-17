@@ -1,5 +1,7 @@
 # PINT: Pouring IPA for Network Trust
 
+![PINT Dashboard](images/dashboard.png)
+
 PINT is a self-service WiFi enrollment portal for [Computer Science House](https://csh.rit.edu). Members log in with their CSH Keycloak account and PINT issues them a certificate from FreeIPA. That certificate is used to authenticate to the WiFi network via EAP-TLS, with no passwords involved. WiFi controllers (home routers, etc.) can also enroll for a RadSec client certificate to proxy authentication back to FreeRADIUS over a mutual-TLS connection.
 
 PINT is a single stateless Go binary. There is no database. All persistent state lives in Kubernetes Secrets that FreeRADIUS mounts directly.
