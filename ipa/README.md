@@ -8,7 +8,7 @@ PINT issues four types of certificates from FreeIPA, each requiring a dedicated 
 
 | Profile | Used For | Validity | EKU |
 |---|---|---|---|
-| `pint_wifi` | EAP-TLS client certs for user devices | 1 year | clientAuth |
+| `pint_eap_client` | EAP-TLS client certs for user devices | 1 year | clientAuth |
 | `pint_radsec_client` | mTLS client certs for home routers connecting to RadSec | 5 years | clientAuth |
 | `pint_radsec_server` | Server cert for FreeRADIUS; used for both the outer RadSec TLS listener and the inner EAP-TLS authentication (two separate certs, same profile) | 90 days | serverAuth |
 | `pint_profile_signing` | CMS signing cert for iOS mobileconfig profiles | 1 year | codeSigning |
@@ -45,7 +45,7 @@ The script supports three actions:
 Once imported, set these environment variables so PINT uses the profiles when requesting certificates:
 
 ```
-PINT_IPA_CERT_PROFILE=pint_wifi
+PINT_IPA_EAP_CLIENT_CERT_PROFILE=pint_eap_client
 PINT_IPA_RADSEC_CLIENT_CERT_PROFILE=pint_radsec_client
 PINT_IPA_RADSEC_SERVER_CERT_PROFILE=pint_radsec_server
 PINT_IPA_EAP_CERT_PROFILE=pint_radsec_server

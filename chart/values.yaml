@@ -27,9 +27,10 @@ config:
   ipaWirelessCAName: "wireless"
   ipaRadSecCAName: "radsec"
   ipaRootCAName: "ipa"
-  ipaCertProfile: "pint_wifi"
+  ipaEAPClientCertProfile: "pint_eap_client"
   ipaRadSecClientCertProfile: "pint_radsec_client"
   ipaRadSecServerCertProfile: "pint_radsec_server"
+  ipaEAPCertProfile: "pint_eap_server"
   ipaSkipTLSVerify: false
 
   # RADIUS / RadSec

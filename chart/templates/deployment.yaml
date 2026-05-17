@@ -47,7 +47,7 @@ spec:
             - name: PINT_RADIUS_SERVER
               value: {{ .Values.config.radiusServer | quote }}
             {{- if .Values.config.ipaCertProfile }}
-            - name: PINT_IPA_CERT_PROFILE
+            - name: PINT_IPA_EAP_CLIENT_CERT_PROFILE
               value: {{ .Values.config.ipaCertProfile | quote }}
             {{- end }}
             {{- if .Values.config.ipaRadSecClientCertProfile }}

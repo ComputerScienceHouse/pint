@@ -94,7 +94,7 @@ func (s *Server) GenerateProfile(c *gin.Context) {
 			s.fail(c, http.StatusInternalServerError, "key generation failed", err)
 			return
 		}
-		certDER, err := s.IPA.CertRequest(username, string(csrPEM), s.Cfg.IPAWirelessCAName, s.Cfg.IPACertProfile)
+		certDER, err := s.IPA.CertRequest(username, string(csrPEM), s.Cfg.IPAWirelessCAName, s.Cfg.EAPClientCertProfile)
 		if err != nil {
 			s.fail(c, http.StatusInternalServerError, fmt.Sprintf("cert request failed: %v", err), err)
 			return

@@ -224,7 +224,7 @@ func main() {
 	}
 
 	// SCEP public routes — iOS calls these without a session cookie.
-	scepHandler, err := internscep.NewHandler(log, srv.Challenges, ipaClient, srv.DM, cfg.IPAWirelessCAName, cfg.IPACertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
+	scepHandler, err := internscep.NewHandler(log, srv.Challenges, ipaClient, srv.DM, cfg.IPAWirelessCAName, cfg.EAPClientCertProfile, scepRACert, scepRAKey, caDER, rootCACertDER)
 	if err != nil {
 		log.Fatal("scep handler init failed", zap.Error(err))
 	}

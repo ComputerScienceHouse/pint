@@ -1,6 +1,7 @@
 package scep
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 	"github.com/smallstep/pkcs7"
 	sceppkg "github.com/smallstep/scep"
 	"go.uber.org/zap"
+	"golang.org/x/crypto/ocsp"
 )
 
 // getCACaps response advertises POST support so clients don't fall back to
@@ -270,18 +272,57 @@ func clientCertFromSCEPMessage(raw []byte) (*x509.Certificate, error) {
 	return nil, errors.New("no client certificate found in SCEP message")
 }
 
-// verifyWiFiCert checks that cert was issued by the WiFi CA chain.
+// verifyWiFiCert checks that cert was issued by the WiFi CA chain and is not revoked.
+// Revocation is checked via OCSP using the URL embedded in the cert's AIA extension.
 func (h *Handler) verifyWiFiCert(cert *x509.Certificate) error {
 	roots := x509.NewCertPool()
 	roots.AddCert(h.rootCA)
 	intermediates := x509.NewCertPool()
 	intermediates.AddCert(h.wifiCA)
-	_, err := cert.Verify(x509.VerifyOptions{
+	if _, err := cert.Verify(x509.VerifyOptions{
 		Roots:         roots,
 		Intermediates: intermediates,
 		KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+	return h.checkOCSP(cert, h.wifiCA)
+}
+
+// checkOCSP queries the OCSP URL from cert's AIA extension and returns an error
+// if the cert is revoked or the check cannot be completed.
+func (h *Handler) checkOCSP(cert, issuer *x509.Certificate) error {
+	if len(cert.OCSPServer) == 0 {
+		h.log.Warn("scep: cert has no OCSP URL, skipping revocation check",
+			zap.String("serial", cert.SerialNumber.String()))
+		return nil
+	}
+
+	reqBytes, err := ocsp.CreateRequest(cert, issuer, nil)
+	if err != nil {
+		return fmt.Errorf("ocsp: build request: %w", err)
+	}
+
+	resp, err := http.Post(cert.OCSPServer[0], "application/ocsp-request", bytes.NewReader(reqBytes)) //nolint:noctx
+	if err != nil {
+		return fmt.Errorf("ocsp: request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+	if err != nil {
+		return fmt.Errorf("ocsp: read response: %w", err)
+	}
+
+	ocspResp, err := ocsp.ParseResponse(body, issuer)
+	if err != nil {
+		return fmt.Errorf("ocsp: parse response: %w", err)
+	}
+
+	if ocspResp.Status == ocsp.Revoked {
+		return fmt.Errorf("ocsp: certificate %s is revoked", cert.SerialNumber.String())
+	}
+	return nil
 }
 
 func (h *Handler) sendFail(c *gin.Context, msg *sceppkg.PKIMessage, info sceppkg.FailInfo) {

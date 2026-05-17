@@ -21,7 +21,7 @@ type Config struct {
 	IPAWirelessCAName       string
 	RadSecCAName            string // PINT_IPA_RADSEC_CA_NAME:FreeIPA intermediate CA for RadSec certs
 	RootCAName              string // PINT_IPA_ROOT_CA_NAME:signing root CA; defaults to "ipa"
-	IPACertProfile          string // PINT_IPA_CERT_PROFILE:FreeIPA profile for WiFi client certs (default: pint_wifi)
+	EAPClientCertProfile          string // PINT_IPA_EAP_CLIENT_CERT_PROFILE:FreeIPA profile for WiFi client certs (default: pint_eap_client)
 	RadSecClientCertProfile string // PINT_IPA_RADSEC_CLIENT_CERT_PROFILE:FreeIPA profile for RadSec router client certs (default: pint_radsec_client)
 	RadSecServerCertProfile string // PINT_IPA_RADSEC_SERVER_CERT_PROFILE:FreeIPA profile for FreeRADIUS outer RadSec TLS cert (default: pint_radsec_server)
 	EAPCertProfile          string // PINT_IPA_EAP_CERT_PROFILE:FreeIPA profile for FreeRADIUS EAP-TLS server cert, issued by the wireless CA (default: pint_radsec_server)
@@ -131,10 +131,10 @@ func Load() (*Config, error) {
 	if cfg.RootCAName == "" {
 		cfg.RootCAName = "ipa"
 	}
-	cfg.IPACertProfile = optional("PINT_IPA_CERT_PROFILE", "pint_wifi")
+	cfg.EAPClientCertProfile = optional("PINT_IPA_EAP_CLIENT_CERT_PROFILE", "pint_eap_client")
 	cfg.RadSecClientCertProfile = optional("PINT_IPA_RADSEC_CLIENT_CERT_PROFILE", "pint_radsec_client")
 	cfg.RadSecServerCertProfile = optional("PINT_IPA_RADSEC_SERVER_CERT_PROFILE", "pint_radsec_server")
-	cfg.EAPCertProfile = optional("PINT_IPA_EAP_CERT_PROFILE", "pint_radsec_server")
+	cfg.EAPCertProfile = optional("PINT_IPA_EAP_CERT_PROFILE", "pint_eap_server")
 	cfg.CodeSigningCAName = require("PINT_IPA_CODE_SIGNING_CA_NAME")
 	cfg.CodeSigningCertProfile = optional("PINT_IPA_CODE_SIGNING_CERT_PROFILE", "pint_profile_signing")
 	cfg.ProfileSigningCertSecret = optional("PINT_PROFILE_SIGNING_CERT_SECRET", "pint-profile-signing-cert")
