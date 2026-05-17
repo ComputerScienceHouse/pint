@@ -64,6 +64,7 @@ envSecret: ""
 secrets:
   config:              ""  # default: <fullname>-config  (clients.json, clients.conf, status-secret, status)
   radSecCert:          ""  # default: <fullname>-radsec-server-certificates  (tls.crt, tls.key, ca.pem, wifi-ca.pem)
+  eapCert:             ""  # default: <fullname>-eap-server-cert  (eap.crt, eap.key); wireless CA-issued, verified by iOS devices
   profileSigningCert:  ""  # default: <fullname>-profile-signing-cert  (tls.crt, tls.key)
   scepRACert:          ""  # default: <fullname>-scep-ra-cert  (tls.crt, tls.key); auto-generated on first startup
   deviceMap:           ""  # default: <fullname>-device-map  (device-map.json); auto-created on first SCEP enrollment

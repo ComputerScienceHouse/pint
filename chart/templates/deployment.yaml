@@ -98,6 +98,8 @@ spec:
               value: {{ include "pint.secretName.config" . | quote }}
             - name: PINT_RADSEC_CERT_SECRET
               value: {{ include "pint.secretName.radSecCert" . | quote }}
+            - name: PINT_EAP_CERT_SECRET
+              value: {{ include "pint.secretName.eapCert" . | quote }}
             - name: PINT_SCEP_RA_CERT_SECRET
               value: {{ include "pint.secretName.scepRACert" . | quote }}
             - name: PINT_DEVICE_MAP_SECRET

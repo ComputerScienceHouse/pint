@@ -35,7 +35,8 @@ type Config struct {
 	// Kubernetes
 	Namespace            string
 	ConfigSecret         string // PINT_CONFIG_SECRET:K8s Secret holding clients.json, clients.conf, status-secret, and status config
-	RadSecCertSecret     string // PINT_RADSEC_CERT_SECRET:K8s Secret storing FreeRADIUS TLS cert+key
+	RadSecCertSecret     string // PINT_RADSEC_CERT_SECRET:K8s Secret storing FreeRADIUS outer RadSec TLS cert+key (tls.crt, tls.key, ca.pem, wifi-ca.pem)
+	EAPCertSecret        string // PINT_EAP_CERT_SECRET:K8s Secret storing FreeRADIUS EAP-TLS server cert+key (eap.crt, eap.key); wireless CA-issued
 	FreeRADIUSDeployment string
 
 	// FreeRADIUS status virtual server
@@ -94,6 +95,7 @@ func Load() (*Config, error) {
 	cfg.Namespace = optional("PINT_NAMESPACE", "pint")
 	cfg.ConfigSecret = optional("PINT_CONFIG_SECRET", "pint-config")
 	cfg.RadSecCertSecret = optional("PINT_RADSEC_CERT_SECRET", "pint-radsec-server-certificates")
+	cfg.EAPCertSecret = optional("PINT_EAP_CERT_SECRET", "pint-eap-server-cert")
 	cfg.FreeRADIUSDeployment = optional("PINT_FREERADIUS_DEPLOYMENT", "pint-freeradius")
 	cfg.RadiusServer = require("PINT_RADIUS_SERVER")
 	cfg.RADIUSStatusPort = optional("PINT_RADIUS_STATUS_PORT", "18121")

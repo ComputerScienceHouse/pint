@@ -66,6 +66,10 @@ never collide. Each can be overridden via the corresponding values key.
 {{- .Values.secrets.deviceMap | default (printf "%s-device-map" (include "pint.fullname" .)) }}
 {{- end }}
 
+{{- define "pint.secretName.eapCert" -}}
+{{- .Values.secrets.eapCert | default (printf "%s-eap-server-cert" (include "pint.fullname" .)) }}
+{{- end }}
+
 {{- define "pint.envSecret" -}}
 {{- .Values.envSecret | default (include "pint.fullname" .) }}
 {{- end }}

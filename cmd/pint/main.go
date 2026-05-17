@@ -381,7 +381,7 @@ func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaC
 // cert secret. If the cert is missing or within radSecRenewBefore of expiry, a new one is
 // issued from the wireless CA so that iOS devices can verify it via their mobileconfig anchor.
 func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, ipaClient *freeipa.Client, cfg *config.Config) error {
-	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.RadSecCertSecret, metav1.GetOptions{})
+	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.EAPCertSecret, metav1.GetOptions{})
 	if err == nil {
 		existing := secret.Data["eap.crt"]
 		key := secret.Data["eap.key"]
@@ -414,7 +414,7 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 	}
 	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
-	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM); writeErr != nil {
+	if writeErr := radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM); writeErr != nil {
 		return fmt.Errorf("write eap cert: %w", writeErr)
 	}
 	log.Info("issued and stored new EAP server cert")

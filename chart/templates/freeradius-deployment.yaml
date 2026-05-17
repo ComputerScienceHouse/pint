@@ -43,7 +43,13 @@ spec:
             secretName: {{ include "pint.secretName.config" . }}
             optional: true
         - name: pint-radsec
-          secret:
-            secretName: {{ include "pint.secretName.radSecCert" . }}
+          projected:
             defaultMode: 0444
+            sources:
+              - secret:
+                  name: {{ include "pint.secretName.radSecCert" . }}
+                  optional: true
+              - secret:
+                  name: {{ include "pint.secretName.eapCert" . }}
+                  optional: true
 {{- end }}

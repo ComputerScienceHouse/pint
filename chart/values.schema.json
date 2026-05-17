@@ -148,6 +148,10 @@
         "deviceMap": {
           "type": "string",
           "description": "Secret storing the cert serial to device info map. Defaults to '<fullname>-device-map'."
+        },
+        "eapCert": {
+          "type": "string",
+          "description": "Secret storing the FreeRADIUS EAP-TLS server cert and key (eap.crt, eap.key). Wireless CA-issued; verified by iOS devices via mobileconfig anchor. Defaults to '<fullname>-eap-server-cert'."
         }
       }
     },

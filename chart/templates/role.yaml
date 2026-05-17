@@ -17,6 +17,7 @@ rules:
       - {{ include "pint.secretName.scepRACert" . | quote }}
       - {{ include "pint.secretName.profileSigningCert" . | quote }}
       - {{ include "pint.secretName.deviceMap" . | quote }}
+      - {{ include "pint.secretName.eapCert" . | quote }}
     verbs: ["get", "patch", "update"]
   - apiGroups: ["apps"]
     resources: ["deployments"]
