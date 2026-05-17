@@ -23,29 +23,36 @@ const (
 	KeyRadSecTLS    = "radsec-tls.conf"
 )
 
-// WriteRadiusConfig renders clients.conf from the given client list and patches
-// the clients.conf key in the named Kubernetes Secret.
-func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, clients []RadiusClient) error {
-	return patchSecretKey(ctx, k8s, namespace, secretName, KeyClientsConf, []byte(RenderClientsConf(clients)))
+// WriteRadiusConfig renders clients.conf from the given client list, patches the
+// key in the named Kubernetes Secret, and triggers a FreeRADIUS rollout restart.
+func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, clients []RadiusClient) error {
+	if err := patchSecretKey(ctx, k8s, namespace, secretName, KeyClientsConf, []byte(RenderClientsConf(clients))); err != nil {
+		return err
+	}
+	return Reload(ctx, k8s, namespace, deployment)
 }
 
 // WriteRadSecTLS renders and patches the radsec-tls.conf key in the named K8s Secret.
-// Returns (didUpdate, err). didUpdate is false when the existing value is identical.
-func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, checkCRL, proxyProtocol bool) (bool, error) {
+// If the content changed, FreeRADIUS is reloaded. No-op (no reload) when unchanged.
+func WriteRadSecTLS(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, checkCRL, proxyProtocol bool) error {
 	rendered := RenderRadSecTLS(checkCRL, proxyProtocol)
 	existing, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
 	if err == nil && string(existing.Data[KeyRadSecTLS]) == rendered {
-		return false, nil
+		return nil
 	}
-	return true, patchSecretKey(ctx, k8s, namespace, secretName, KeyRadSecTLS, []byte(rendered))
+	if err := patchSecretKey(ctx, k8s, namespace, secretName, KeyRadSecTLS, []byte(rendered)); err != nil {
+		return err
+	}
+	return Reload(ctx, k8s, namespace, deployment)
 }
 
-// WriteRadSecServerCert writes all FreeRADIUS TLS material to the named K8s Secret:
+// WriteRadSecServerCert writes all FreeRADIUS TLS material to the named K8s Secret
+// and triggers a FreeRADIUS rollout restart:
 //   - tls.crt / tls.key: server cert presented to RadSec clients and EAP supplicants
 //   - ca.pem: RadSec CA chain; verifies connecting router client certificates
-//   - wifi-ca.pem: WiFi CA cert; verifies EAP-TLS user certificates
-func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string, certPEM, keyPEM, caPEM, wifiCAPEM []byte) error {
-	return UpsertSecret(ctx, k8s, &corev1.Secret{
+//   - wifi-ca.pem: WiFi CA chain; verifies EAP-TLS user client certificates
+func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, certPEM, keyPEM, caPEM, wifiCAPEM []byte) error {
+	if err := UpsertSecret(ctx, k8s, &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
 		Data: map[string][]byte{
 			"tls.crt":     certPEM,
@@ -53,7 +60,10 @@ func WriteRadSecServerCert(ctx context.Context, k8s kubernetes.Interface, namesp
 			"ca.pem":      caPEM,
 			"wifi-ca.pem": wifiCAPEM,
 		},
-	})
+	}); err != nil {
+		return err
+	}
+	return Reload(ctx, k8s, namespace, deployment)
 }
 
 // EnsureConfigSecret creates the combined PINT config secret with all keys
@@ -70,13 +80,6 @@ func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace
 			KeyRadSecTLS:    []byte(RenderRadSecTLS(true, false)),
 		},
 	})
-}
-
-// patchSecretKey updates a single key without touching the rest of the secret,
-// avoiding races with other components that may patch different keys concurrently.
-// PatchSecretKey updates a single key in an existing K8s Secret via a merge patch.
-func PatchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string, value []byte) error {
-	return patchSecretKey(ctx, k8s, namespace, secretName, key, value)
 }
 
 func patchSecretKey(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string, value []byte) error {
@@ -110,7 +113,11 @@ func createIfAbsent(ctx context.Context, k8s kubernetes.Interface, secret *corev
 
 // Reload triggers a rollout restart of the FreeRADIUS deployment by patching
 // the pod template annotation, equivalent to kubectl rollout restart.
+// A no-op when deployment is empty (e.g. FreeRADIUS is disabled).
 func Reload(ctx context.Context, k8s kubernetes.Interface, namespace, deployment string) error {
+	if deployment == "" {
+		return nil
+	}
 	patch := fmt.Sprintf(
 		`{"spec":{"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":%q}}}}}`,
 		time.Now().Format(time.RFC3339),

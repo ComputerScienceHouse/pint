@@ -206,14 +206,10 @@ func commitStore(c *gin.Context, log *zap.Logger, store *radius.ClientStore, k8s
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return "", err
 	}
-	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.ConfigSecret, store.All()); err != nil {
-		log.Error("radius config write failed", zap.Error(err))
+	if err := radius.WriteRadiusConfig(ctx, k8s, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, store.All()); err != nil {
+		log.Error("radius config write/reload failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return "", err
-	}
-	if err := radius.Reload(ctx, k8s, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-		log.Warn("freeradius reload failed", zap.Error(err))
-		return err.Error(), nil
 	}
 	log.Debug("freeradius reloaded")
 	return "", nil

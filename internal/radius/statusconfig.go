@@ -43,11 +43,14 @@ func RenderStatusConfig(secret, cidr string) string {
 }
 
 // WriteStatusConfig patches the status key in the named Secret with the rendered config.
-// Returns (didUpdate, err). didUpdate is false when the existing value is identical.
-func WriteStatusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, config string) (bool, error) {
+// If the content changed, FreeRADIUS is reloaded. No-op (no reload) when unchanged.
+func WriteStatusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment, config string) error {
 	existing, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
 	if err == nil && string(existing.Data[KeyStatus]) == config {
-		return false, nil
+		return nil
 	}
-	return true, patchSecretKey(ctx, k8s, namespace, secretName, KeyStatus, []byte(config))
+	if err := patchSecretKey(ctx, k8s, namespace, secretName, KeyStatus, []byte(config)); err != nil {
+		return err
+	}
+	return Reload(ctx, k8s, namespace, deployment)
 }

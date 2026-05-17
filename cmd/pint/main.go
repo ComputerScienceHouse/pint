@@ -87,26 +87,12 @@ func main() {
 		log.Fatal("ensure status secret failed", zap.Error(err))
 	}
 	statusConf := radius.RenderStatusConfig(statusSecret, "0.0.0.0/0")
-	updated, err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, statusConf)
-	if err != nil {
+	if err := radius.WriteStatusConfig(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, statusConf); err != nil {
 		log.Fatal("write status config failed", zap.Error(err))
 	}
-	if updated {
-		log.Info("updated FreeRADIUS status config, triggering rollout restart")
-		if err := radius.Reload(context.Background(), k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-			log.Warn("status config reload failed", zap.Error(err))
-		}
-	}
 
-	tlsUpdated, err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.RadSecCheckCRL, cfg.RadSecProxyProtocol)
-	if err != nil {
+	if err := radius.WriteRadSecTLS(context.Background(), k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, cfg.RadSecCheckCRL, cfg.RadSecProxyProtocol); err != nil {
 		log.Fatal("write radsec-tls.conf failed", zap.Error(err))
-	}
-	if tlsUpdated {
-		log.Info("updated radsec-tls.conf, triggering rollout restart", zap.Bool("check_crl", cfg.RadSecCheckCRL))
-		if err := radius.Reload(context.Background(), k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-			log.Warn("radsec tls config reload failed", zap.Error(err))
-		}
 	}
 
 	// Fetch CA certs in parallel. Code-signing CA is fetched only when configured.
@@ -328,13 +314,10 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 							zap.Int("stored_bytes", len(stored)),
 							zap.Int("expected_bytes", len(wifiCAPEM)),
 						)
-						if patchErr := radius.PatchSecretKey(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, "wifi-ca.pem", wifiCAPEM); patchErr != nil {
-							log.Error("failed to update wifi-ca.pem in secret", zap.Error(patchErr))
+						if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, existing, key, caPEM, wifiCAPEM); writeErr != nil {
+							log.Error("failed to update wifi-ca.pem in secret", zap.Error(writeErr))
 						} else {
 							log.Info("updated wifi-ca.pem in secret, triggering FreeRADIUS rollout restart")
-							if reloadErr := radius.Reload(ctx, k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); reloadErr != nil {
-								log.Warn("FreeRADIUS rollout restart failed after wifi-ca.pem update", zap.Error(reloadErr))
-							}
 						}
 					}
 
@@ -362,7 +345,7 @@ func loadOrRenewRadSecServerCert(ctx context.Context, log *zap.Logger, k8sClient
 	}
 	newKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
-	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, newCertPEM, newKeyPEM, caPEM, wifiCAPEM); writeErr != nil {
+	if writeErr := radius.WriteRadSecServerCert(ctx, k8sClient, cfg.Namespace, cfg.RadSecCertSecret, cfg.FreeRADIUSDeployment, newCertPEM, newKeyPEM, caPEM, wifiCAPEM); writeErr != nil {
 		return nil, nil, false, fmt.Errorf("write radsec cert: %w", writeErr)
 	}
 	log.Info("issued and stored new RadSec server cert")
@@ -383,11 +366,7 @@ func watchRadSecServerCert(log *zap.Logger, k8sClient kubernetes.Interface, ipaC
 			continue
 		}
 		if renewed {
-			if err := radius.Reload(ctx, k8sClient, cfg.Namespace, cfg.FreeRADIUSDeployment); err != nil {
-				log.Error("radsec cert watcher: freeradius reload failed", zap.Error(err))
-			} else {
-				log.Info("radsec cert watcher: renewed cert and reloaded freeradius")
-			}
+			log.Info("radsec cert watcher: renewed cert and reloaded freeradius")
 		}
 	}
 }

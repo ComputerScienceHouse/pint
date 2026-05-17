@@ -34,7 +34,7 @@ func TestWriteRadiusConfig(t *testing.T) {
 		{Username: "mbillow", IPCIDR: nil},
 	}
 
-	if err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-config", clients); err != nil {
+	if err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-config", "", clients); err != nil {
 		t.Fatalf("WriteRadiusConfig() error: %v", err)
 	}
 
@@ -60,7 +60,7 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	caPEM := []byte("-----BEGIN CERTIFICATE-----\nfake-ca\n-----END CERTIFICATE-----\n")
 	wifiCAPEM := []byte("-----BEGIN CERTIFICATE-----\nfake-wifi-ca\n-----END CERTIFICATE-----\n")
 
-	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
+	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", "", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
 		t.Fatalf("WriteRadSecServerCert() error: %v", err)
 	}
 
@@ -82,7 +82,7 @@ func TestWriteRadSecServerCert(t *testing.T) {
 	}
 
 	// Call again to exercise the update path
-	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
+	if err := radius.WriteRadSecServerCert(ctx, k8s, "default", "pint-radsec-server", "", certPEM, keyPEM, caPEM, wifiCAPEM); err != nil {
 		t.Fatalf("WriteRadSecServerCert() update error: %v", err)
 	}
 }
@@ -91,12 +91,8 @@ func TestWriteRadSecTLS_WritesAndDetectsChanges(t *testing.T) {
 	ctx := context.Background()
 	k8s := fake.NewSimpleClientset(newConfigSecret("default", "pint-config"))
 
-	updated, err := radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false, false)
-	if err != nil {
+	if err := radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", "", false, false); err != nil {
 		t.Fatalf("WriteRadSecTLS() error: %v", err)
-	}
-	if !updated {
-		t.Error("expected updated=true on first write")
 	}
 
 	secret, err := k8s.CoreV1().Secrets("default").Get(ctx, "pint-config", metav1.GetOptions{})
@@ -107,13 +103,9 @@ func TestWriteRadSecTLS_WritesAndDetectsChanges(t *testing.T) {
 		t.Error("expected check_crl = no in radsec-tls.conf")
 	}
 
-	// Second write with same value should not report updated.
-	updated, err = radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", false, false)
-	if err != nil {
+	// Second write with same value should be a no-op (no error).
+	if err := radius.WriteRadSecTLS(ctx, k8s, "default", "pint-config", "", false, false); err != nil {
 		t.Fatalf("WriteRadSecTLS() second call error: %v", err)
-	}
-	if updated {
-		t.Error("expected updated=false when config unchanged")
 	}
 }
 
