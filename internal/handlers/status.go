@@ -3,7 +3,6 @@ package handlers
 
 import (
 	"net/http"
-	"net/url"
 
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	"github.com/gin-gonic/gin"
@@ -15,8 +14,8 @@ func (s *Server) StatusPage(c *gin.Context) {
 	nav, _ := getNavInfo(c)
 	data := nav.toMap()
 	data["CSRFToken"] = c.GetString(csrfContextKey)
-	data["FlashSuccess"] = c.Query("success")
-	data["FlashWarn"] = c.Query("warn")
+	data["FlashSuccess"] = getFlash(c, flashSuccess)
+	data["FlashWarn"] = getFlash(c, flashWarn)
 
 	ctx := c.Request.Context()
 
@@ -72,10 +71,11 @@ func (s *Server) Reload(c *gin.Context) {
 	actor, _ := getUsername(c)
 	if err := radius.Reload(c.Request.Context(), s.K8s, s.Cfg.Namespace, s.Cfg.FreeRADIUSDeployment); err != nil {
 		s.log().Error("manual freeradius reload failed", zap.String("actor", actor), zap.Error(err))
-		dest := "/status?warn=" + url.QueryEscape("Rollout restart failed: "+err.Error())
-		c.Redirect(http.StatusFound, dest)
+		setFlash(c, flashWarn, "Rollout restart failed: "+err.Error())
+		c.Redirect(http.StatusFound, "/status")
 		return
 	}
 	s.log().Info("manual freeradius reload triggered", zap.String("actor", actor))
-	c.Redirect(http.StatusFound, "/status?success=FreeRADIUS+rollout+restart+triggered")
+	setFlash(c, flashSuccess, "FreeRADIUS rollout restart triggered")
+	c.Redirect(http.StatusFound, "/status")
 }

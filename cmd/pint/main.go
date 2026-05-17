@@ -14,6 +14,8 @@ import (
 	"time"
 
 	cshauth "github.com/computersciencehouse/csh-auth/v2"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/ComputerScienceHouse/pint/internal/certmgr"
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/devicemap"
@@ -193,6 +195,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(handlers.ZapLogger(log), gin.Recovery())
+	r.Use(sessions.Sessions("pint_session", cookie.NewStore([]byte(cfg.SessionSecret))))
 	r.HTMLRender = buildTemplates()
 
 	var authMiddleware gin.HandlerFunc

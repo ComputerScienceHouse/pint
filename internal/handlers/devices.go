@@ -48,16 +48,6 @@ func parseCertTime(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unparseable cert time %q", s)
 }
 
-// deviceFlashMessages maps opaque URL keys to user-facing messages.
-var deviceFlashMessages = map[string]string{
-	"revoked":          "Certificate revoked successfully.",
-	"revoke-failed":    "Revocation failed. Please try again or contact support.",
-	"invalid-serial":   "Invalid serial number.",
-	"ownership-failed": "Could not verify certificate ownership.",
-	"not-found":        "Certificate not found.",
-}
-
-func resolveFlash(key string) string { return deviceFlashMessages[key] }
 
 func (s *Server) revokeWiFiCert(ctx context.Context, serial int64, serialStr string) error {
 	if err := s.IPA.CertRevoke(serial, s.Cfg.IPAWirelessCAName, freeipa.RevocationReasonCessationOfOperation); err != nil {
@@ -149,8 +139,8 @@ func (s *Server) DevicesPage(c *gin.Context) {
 	data["Devices"] = active
 	data["ExpiredDevices"] = expired
 	data["CSRFToken"] = c.GetString(csrfContextKey)
-	data["FlashSuccess"] = resolveFlash(c.Query("msg"))
-	data["FlashError"] = resolveFlash(c.Query("err"))
+	data["FlashSuccess"] = getFlash(c, flashSuccess)
+	data["FlashError"] = getFlash(c, flashError)
 	c.HTML(http.StatusOK, "devices.html", data)
 }
 
@@ -165,14 +155,16 @@ func (s *Server) RevokeDevice(c *gin.Context) {
 	serialStr := c.PostForm("serial")
 	serial, err := strconv.ParseInt(serialStr, 10, 64)
 	if err != nil || serialStr == "" {
-		c.Redirect(http.StatusFound, "/devices?err=invalid-serial")
+		setFlash(c, flashError, "Invalid serial number.")
+		c.Redirect(http.StatusFound, "/devices")
 		return
 	}
 
 	certList, err := s.IPA.CertFind(username, s.Cfg.IPAWirelessCAName)
 	if err != nil {
 		s.log().Error("devices: cert_find failed during revoke", zap.String("username", username), zap.Error(err))
-		c.Redirect(http.StatusFound, "/devices?err=ownership-failed")
+		setFlash(c, flashError, "Could not verify certificate ownership.")
+		c.Redirect(http.StatusFound, "/devices")
 		return
 	}
 	owned := false
@@ -184,17 +176,20 @@ func (s *Server) RevokeDevice(c *gin.Context) {
 	}
 	if !owned {
 		s.log().Warn("devices: revoke attempt for unowned cert", zap.String("username", username), zap.Int64("serial", serial))
-		c.Redirect(http.StatusFound, "/devices?err=not-found")
+		setFlash(c, flashError, "Certificate not found.")
+		c.Redirect(http.StatusFound, "/devices")
 		return
 	}
 
 	if err := s.revokeWiFiCert(c.Request.Context(), serial, serialStr); err != nil {
-		c.Redirect(http.StatusFound, "/devices?err=revoke-failed")
+		setFlash(c, flashError, "Revocation failed. Please try again or contact support.")
+		c.Redirect(http.StatusFound, "/devices")
 		return
 	}
 
 	s.log().Info("devices: cert revoked", zap.String("username", username), zap.Int64("serial", serial))
-	c.Redirect(http.StatusFound, "/devices?msg=revoked")
+	setFlash(c, flashSuccess, "Certificate revoked successfully.")
+	c.Redirect(http.StatusFound, "/devices")
 }
 
 // AdminDevicesPage serves GET /admin/devices — RTP view of all enrolled devices.
@@ -227,16 +222,8 @@ func (s *Server) AdminDevicesPage(c *gin.Context) {
 	data := nav.toMap()
 	data["Devices"] = views
 	data["CSRFToken"] = c.GetString(csrfContextKey)
-	flash := resolveFlash(c.Query("msg"))
-	if flash != "" {
-		if sn := c.Query("serial"); sn != "" {
-			if _, err := strconv.ParseInt(sn, 10, 64); err == nil {
-				flash = "Certificate " + sn + " revoked."
-			}
-		}
-	}
-	data["FlashSuccess"] = flash
-	data["FlashError"] = resolveFlash(c.Query("err"))
+	data["FlashSuccess"] = getFlash(c, flashSuccess)
+	data["FlashError"] = getFlash(c, flashError)
 	c.HTML(http.StatusOK, "admin_devices.html", data)
 }
 
@@ -245,7 +232,8 @@ func (s *Server) AdminRevokeDevice(c *gin.Context) {
 	serialStr := c.PostForm("serial")
 	serial, err := strconv.ParseInt(serialStr, 10, 64)
 	if err != nil || serialStr == "" {
-		c.Redirect(http.StatusFound, "/admin/devices?err=invalid-serial")
+		setFlash(c, flashError, "Invalid serial number.")
+		c.Redirect(http.StatusFound, "/admin/devices")
 		return
 	}
 
@@ -259,10 +247,12 @@ func (s *Server) AdminRevokeDevice(c *gin.Context) {
 	}
 
 	if err := s.revokeWiFiCert(c.Request.Context(), serial, serialStr); err != nil {
-		c.Redirect(http.StatusFound, "/admin/devices?err=revoke-failed")
+		setFlash(c, flashError, "Revocation failed. Please try again or contact support.")
+		c.Redirect(http.StatusFound, "/admin/devices")
 		return
 	}
 
 	s.log().Info("admin/devices: cert revoked", zap.String("revoker", revoker), zap.Int64("serial", serial))
-	c.Redirect(http.StatusFound, "/admin/devices?msg=revoked&serial="+serialStr)
+	setFlash(c, flashSuccess, "Certificate "+serialStr+" revoked.")
+	c.Redirect(http.StatusFound, "/admin/devices")
 }

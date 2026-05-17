@@ -59,6 +59,9 @@ type Config struct {
 	// UI
 	RadiusServer string
 
+	// Session
+	SessionSecret string // PINT_SESSION_SECRET: secret key for cookie-backed sessions (required in prod; defaults to "dev-secret" when PINT_DISABLE_OIDC=true)
+
 	// Dev
 	DisableOIDC bool // PINT_DISABLE_OIDC: skip OIDC and inject a static dev user
 
@@ -113,6 +116,13 @@ func Load() (*Config, error) {
 	}
 
 	cfg.DisableOIDC = os.Getenv("PINT_DISABLE_OIDC") == "true"
+	if s := os.Getenv("PINT_SESSION_SECRET"); s != "" {
+		cfg.SessionSecret = s
+	} else if cfg.DisableOIDC {
+		cfg.SessionSecret = "dev-secret-do-not-use-in-production"
+	} else {
+		return nil, fmt.Errorf("missing required environment variable: PINT_SESSION_SECRET")
+	}
 	cfg.EAPMigrateLegacyLeaf = os.Getenv("PINT_EAP_MIGRATE_LEGACY_LEAF") == "true"
 	cfg.IPASkipTLSVerify = os.Getenv("PINT_IPA_SKIP_TLS_VERIFY") == "true"
 	cfg.RadSecCheckCRL = os.Getenv("PINT_RADIUS_RADSEC_CHECK_CRL") != "false"

@@ -341,7 +341,8 @@ All non-sensitive PINT configuration is rendered directly into the Deployment's 
 ```bash
 kubectl create secret generic <release-name> -n pint \
   --from-literal=PINT_CLIENT_SECRET=<oidc-secret> \
-  --from-literal=PINT_IPA_PASSWORD=<ipa-password>
+  --from-literal=PINT_IPA_PASSWORD=<ipa-password> \
+  --from-literal=PINT_SESSION_SECRET=$(openssl rand -base64 32)
 ```
 
 Set `envSecret` in your values to the name of this Secret. The chart mounts it via `envFrom` on the PINT Deployment.
@@ -412,6 +413,7 @@ All configuration is via environment variables. Copy `.env.dev.example` to `.env
 |---|---|
 | `PINT_CLIENT_ID` | Keycloak OIDC client ID |
 | `PINT_CLIENT_SECRET` | Keycloak OIDC client secret |
+| `PINT_SESSION_SECRET` | Secret key for cookie-backed sessions; generate with `openssl rand -base64 32` |
 | `PINT_SERVER_URL` | Public base URL (e.g. `https://pint.csh.rit.edu`) |
 | `PINT_IPA_HOST` | FreeIPA hostname (e.g. `ipa.csh.rit.edu`) |
 | `PINT_IPA_SERVICE_ACCOUNT` | FreeIPA service account DN (`krbprincipalname=pint/host@REALM,...`) |

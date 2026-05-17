@@ -3,7 +3,6 @@ package handlers
 
 import (
 	"net/http"
-	"net/url"
 
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
@@ -24,8 +23,8 @@ func (s *Server) AdminRadiusPage(c *gin.Context) {
 	data["CACertPEM"] = s.CA.RadSecCAChainPEM
 	data["RootClient"] = store.FindByUsername(rootUsername)
 	data["Clients"] = memberClients(store.All())
-	data["FlashSuccess"] = c.Query("success")
-	data["FlashWarn"] = c.Query("warn")
+	data["FlashSuccess"] = getFlash(c, flashSuccess)
+	data["FlashWarn"] = getFlash(c, flashWarn)
 	c.HTML(http.StatusOK, "admin_radius.html", data)
 }
 
@@ -47,7 +46,8 @@ func (s *Server) AdminDelete(c *gin.Context) {
 		return
 	}
 	s.log().Info("admin: radius credentials deleted", zap.String("target", username))
-	c.Redirect(http.StatusFound, adminRadiusRedirect(username+" removed", ""))
+	setFlash(c, flashSuccess, username+" removed")
+	c.Redirect(http.StatusFound, "/admin/radius")
 }
 
 // AdminRegenerate serves POST /admin/radius/regenerate — reissues credentials for any user.
@@ -77,7 +77,8 @@ func (s *Server) AdminRegenerate(c *gin.Context) {
 		return
 	}
 	s.log().Info("admin: radius credentials regenerated", zap.String("target", username), zap.String("serial", entry.CertSerial))
-	c.Redirect(http.StatusFound, adminRadiusRedirect("Credentials regenerated for "+username, ""))
+	setFlash(c, flashSuccess, "Credentials regenerated for "+username)
+	c.Redirect(http.StatusFound, "/admin/radius")
 }
 
 // AdminRootProvision serves POST /admin/radius/root/provision.
@@ -89,7 +90,8 @@ func (s *Server) AdminRootProvision(c *gin.Context) {
 		return
 	}
 	if store.FindByUsername(rootUsername) != nil {
-		c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client already provisioned — use Regenerate to reissue credentials"))
+		setFlash(c, flashWarn, "Root client already provisioned &mdash; use Regenerate to reissue credentials")
+		c.Redirect(http.StatusFound, "/admin/radius")
 		return
 	}
 	entry, keyPEM, certPEM, err := s.issueClientCredentials(rootUsername, s.Cfg.IPAPrincipal)
@@ -142,7 +144,8 @@ func (s *Server) AdminRootUpdateIP(c *gin.Context) {
 	}
 	existing := store.FindByUsername(rootUsername)
 	if existing == nil {
-		c.Redirect(http.StatusFound, "/admin/radius?warn="+url.QueryEscape("Root client is not provisioned"))
+		setFlash(c, flashWarn, "Root client is not provisioned")
+		c.Redirect(http.StatusFound, "/admin/radius")
 		return
 	}
 	ipCIDR, ok := parseIPCIDR(c)
@@ -160,7 +163,8 @@ func (s *Server) AdminRootUpdateIP(c *gin.Context) {
 		return
 	}
 	s.log().Info("admin: root radius source IP updated", zap.String("ip_cidr", ipCIDR))
-	c.Redirect(http.StatusFound, adminRadiusRedirect("Source IP updated for organization controller", ""))
+	setFlash(c, flashSuccess, "Source IP updated for organization controller")
+	c.Redirect(http.StatusFound, "/admin/radius")
 }
 
 func (s *Server) renderRootCredsPage(c *gin.Context, nav navInfo, store *radius.ClientStore, entry *radius.RadiusClient, keyPEM, certPEM, successMsg string) {
@@ -175,13 +179,6 @@ func (s *Server) renderRootCredsPage(c *gin.Context, nav navInfo, store *radius.
 	c.HTML(http.StatusOK, "admin_radius.html", data)
 }
 
-func adminRadiusRedirect(success, warn string) string {
-	dest := "/admin/radius?success=" + url.QueryEscape(success)
-	if warn != "" {
-		dest += "&warn=" + url.QueryEscape(warn)
-	}
-	return dest
-}
 
 func memberClients(all []radius.RadiusClient) []radius.RadiusClient {
 	out := make([]radius.RadiusClient, 0, len(all))

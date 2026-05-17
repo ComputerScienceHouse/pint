@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -38,6 +39,24 @@ type caEntry struct {
 // Keys match PINT_IPA_WIRELESS_CA_NAME and PINT_IPA_RADSEC_CA_NAME in .env.dev.
 var caStore map[string]*caEntry
 
+// certRecord tracks a cert the stub has issued so cert_find can return it.
+// JSON tags match the schema in dev/freeipa-stub/data/certs.json.
+type certRecord struct {
+	SerialNumber  int64     `json:"serial_number"`
+	Subject       string    `json:"subject"`
+	ValidNotAfter time.Time `json:"valid_not_after"`
+	Principal     string    `json:"principal"`
+	CAName        string    `json:"cacn"`
+	Revoked       bool      `json:"revoked"`
+}
+
+var (
+	issuedCerts   []certRecord
+	issuedCertsMu sync.Mutex
+	certsPath     string
+	wifiCA        string
+)
+
 func main() {
 	dataDir := flag.String("data", "dev/freeipa-stub/data", "directory to persist CA keys and certs")
 	wifiCAName := flag.String("wifi-ca", getEnv("PINT_IPA_WIRELESS_CA_NAME", "wireless"), "FreeIPA CA name for WiFi certs (PINT_IPA_WIRELESS_CA_NAME)")
@@ -53,6 +72,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("CA init: %v", err)
 	}
+
+	wifiCA = *wifiCAName
+	certsPath = filepath.Join(*dataDir, "certs.json")
+	issuedCerts, err = loadCerts(certsPath)
+	if err != nil {
+		log.Fatalf("certs load: %v", err)
+	}
+	log.Printf("loaded %d cert records from %s", len(issuedCerts), certsPath)
 
 	tlsCert, err := selfSignedTLSCert()
 	if err != nil {
@@ -218,6 +245,31 @@ func selfSignedTLSCert() (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEM, keyPEM)
 }
 
+// loadCerts reads certs.json; returns an empty slice if the file doesn't exist yet.
+func loadCerts(path string) ([]certRecord, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return []certRecord{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var records []certRecord
+	if err := json.Unmarshal(data, &records); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	return records, nil
+}
+
+// saveCerts writes issuedCerts to certs.json. Must be called with issuedCertsMu held.
+func saveCerts() error {
+	data, err := json.MarshalIndent(issuedCerts, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(certsPath, data, 0644)
+}
+
 func handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: "ipa_session", Value: "stub-session", Path: "/"})
 	w.WriteHeader(http.StatusOK)
@@ -275,6 +327,7 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 		kwargs, _ := params[1].(map[string]interface{})
 		caName, _ := kwargs["cacn"].(string)
 		profileID, _ := kwargs["profile_id"].(string)
+		principal, _ := kwargs["principal"].(string)
 
 		ca, ok := caStore[caName]
 		if !ok {
@@ -288,12 +341,100 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		leaf, _ := x509.ParseCertificate(leafDER)
+		if leaf != nil {
+			issuedCertsMu.Lock()
+			issuedCerts = append(issuedCerts, certRecord{
+				SerialNumber:  leaf.SerialNumber.Int64(),
+				Subject:       leaf.Subject.String(),
+				ValidNotAfter: leaf.NotAfter,
+				Principal:     principal,
+				CAName:        caName,
+			})
+			if err := saveCerts(); err != nil {
+				log.Printf("cert_request: save certs: %v", err)
+			}
+			issuedCertsMu.Unlock()
+		}
+
 		json.NewEncoder(w).Encode(rpcOK(map[string]interface{}{
 			"certificate": base64.StdEncoding.EncodeToString(leafDER),
 		}))
 
+	case "cert_find":
+		params, _ := req["params"].([]interface{})
+		kwargs := map[string]interface{}{}
+		if len(params) >= 2 {
+			kwargs, _ = params[1].(map[string]interface{})
+		}
+		user, _ := kwargs["user"].(string)
+		filterCA, _ := kwargs["cacn"].(string)
+
+		issuedCertsMu.Lock()
+		var results []map[string]interface{}
+		for _, rec := range issuedCerts {
+			if user != "" && rec.Principal != user {
+				continue
+			}
+			if filterCA != "" && rec.CAName != filterCA {
+				continue
+			}
+			results = append(results, map[string]interface{}{
+				"serial_number":   rec.SerialNumber,
+				"valid_not_after": rec.ValidNotAfter.UTC().Format(time.RFC3339),
+				"revoked":         rec.Revoked,
+			})
+		}
+		issuedCertsMu.Unlock()
+
+		// Inject phantom certs when querying the wifi CA for any user:
+		// one active cert with no device-map entry ("Unknown device") and
+		// one already-expired cert, so the devices page always has both
+		// sections populated without needing a real profile download.
+		if filterCA == wifiCA || filterCA == "" {
+			results = append(results,
+				map[string]interface{}{
+					"serial_number":   int64(1),
+					"valid_not_after": time.Now().Add(300 * 24 * time.Hour).UTC().Format(time.RFC3339),
+					"revoked":         false,
+				},
+				map[string]interface{}{
+					"serial_number":   int64(2),
+					"valid_not_after": time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+					"revoked":         false,
+				},
+			)
+		}
+
+		if results == nil {
+			results = []map[string]interface{}{}
+		}
+		json.NewEncoder(w).Encode(rpcOK(results))
+
 	case "cert_revoke":
-		log.Printf("cert_revoke: stub, no-op")
+		params, _ := req["params"].([]interface{})
+		var serial int64
+		if len(params) >= 1 {
+			args, _ := params[0].([]interface{})
+			if len(args) >= 1 {
+				if f, ok := args[0].(float64); ok {
+					serial = int64(f)
+				}
+			}
+		}
+		issuedCertsMu.Lock()
+		for i := range issuedCerts {
+			if issuedCerts[i].SerialNumber == serial {
+				issuedCerts[i].Revoked = true
+				break
+			}
+		}
+		if err := saveCerts(); err != nil {
+			log.Printf("cert_revoke: save certs: %v", err)
+		}
+		issuedCertsMu.Unlock()
+		log.Printf("cert_revoke: serial=%d", serial)
 		json.NewEncoder(w).Encode(rpcOK(map[string]interface{}{"result": true}))
 
 	default:
