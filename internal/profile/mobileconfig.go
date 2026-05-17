@@ -41,9 +41,9 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 		"Name":          "CSH WiFi",
 		"Subject":       [][][]string{{{"CN", p.Username}}},
 		"Challenge":     p.SCEPChallenge,
-		"KeyType":       "RSA",
+		"Key Type":      "RSA",
 		"Keysize":       2048,
-		"KeyUsage":      1, // digitalSignature
+		"Key Usage":     1, // digitalSignature (bitmask: 1=signing, 4=encryption)
 		"CAFingerprint": raFingerprint[:],
 	}
 
