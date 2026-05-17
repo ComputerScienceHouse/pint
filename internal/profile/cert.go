@@ -15,15 +15,18 @@ import (
 	"software.sslmate.com/src/go-pkcs12"
 )
 
-// GenerateKeyAndCSR creates a secp384r1 ECDSA private key and a PEM-encoded CSR with the given CN.
-func GenerateKeyAndCSR(commonName string) (*ecdsa.PrivateKey, []byte, error) {
+// GenerateKeyAndCSR creates a secp384r1 ECDSA private key and a PEM-encoded CSR.
+// Optional dnsNames are added as Subject Alternative Name DNS entries; required for
+// EAP-TLS server certs since iOS 13 ignores the CN for server identity verification.
+func GenerateKeyAndCSR(commonName string, dnsNames ...string) (*ecdsa.PrivateKey, []byte, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P384(), rand.Reader)
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate key: %w", err)
 	}
 
 	template := &x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: commonName},
+		Subject:  pkix.Name{CommonName: commonName},
+		DNSNames: dnsNames,
 	}
 	csrDER, err := x509.CreateCertificateRequest(rand.Reader, template, key)
 	if err != nil {

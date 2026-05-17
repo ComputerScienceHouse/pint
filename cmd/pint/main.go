@@ -379,14 +379,21 @@ func loadOrRenewEAPServerCert(ctx context.Context, log *zap.Logger, k8sClient ku
 						chainPEM := append(existing, wifiCAPEM...)
 						return radius.WriteEAPServerCert(ctx, k8sClient, cfg.Namespace, cfg.EAPCertSecret, cfg.FreeRADIUSDeployment, chainPEM, key, wifiCAPEM)
 					}
-					log.Info("reusing existing EAP server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
-					return nil
+					// iOS 13+ ignores CN for EAP-TLS server identity; a DNS SAN is mandatory.
+					// Reissue if the cert has no DNS SANs so legacy certs are upgraded automatically.
+					if len(cert.DNSNames) == 0 {
+						log.Info("eap.crt has no SAN, reissuing to add DNS SAN (required by iOS 13+)",
+							zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
+					} else {
+						log.Info("reusing existing EAP server cert", zap.String("expires", cert.NotAfter.Format(time.RFC3339)))
+						return nil
+					}
 				}
 			}
 		}
 	}
 
-	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname)
+	privKey, csrPEM, genErr := profile.GenerateKeyAndCSR(cfg.IPAServiceHostname, cfg.IPAServiceHostname)
 	if genErr != nil {
 		return fmt.Errorf("generate eap key/csr: %w", genErr)
 	}
