@@ -294,6 +294,10 @@ function confirmRevoke(serial, deviceName) {
     _revokeModal.show();
 }
 
+document.getElementById('revokeConfirm').addEventListener('click', function() {
+    document.getElementById('revokeForm').submit();
+});
+
 document.getElementById('expiredCerts')?.addEventListener('show.bs.collapse', function() {
     const btn = document.querySelector('[data-bs-target="#expiredCerts"]');
     if (btn) btn.querySelector('.mdi').classList.replace('mdi-chevron-down', 'mdi-chevron-up');
