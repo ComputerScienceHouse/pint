@@ -27,4 +27,10 @@ spec:
       name: status
       nodePort: {{ .Values.freeradius.statusServer.nodePort }}
     {{- end }}
+    {{- if and .Values.freeradius.agentCheck.enabled .Values.freeradius.agentCheck.nodePort }}
+    - port: {{ .Values.freeradius.agentCheck.port }}
+      targetPort: agent-check
+      name: agent-check
+      nodePort: {{ .Values.freeradius.agentCheck.nodePort }}
+    {{- end }}
 {{- end }}
