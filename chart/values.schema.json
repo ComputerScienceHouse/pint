@@ -135,6 +135,14 @@
         "profileSigningCert": {
           "type": "string",
           "description": "Secret storing the iOS mobileconfig signing certificate and key. Defaults to '<fullname>-profile-signing-cert'."
+        },
+        "scepRACert": {
+          "type": "string",
+          "description": "Secret storing the SCEP RA certificate and key. Defaults to '<fullname>-scep-ra-cert'."
+        },
+        "deviceMap": {
+          "type": "string",
+          "description": "Secret storing the cert serial to device info map. Defaults to '<fullname>-device-map'."
         }
       }
     },

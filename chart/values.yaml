@@ -66,6 +66,7 @@ secrets:
   radSecCert:          ""  # default: <fullname>-radsec-server-certificates  (tls.crt, tls.key, ca.pem, wifi-ca.pem)
   profileSigningCert:  ""  # default: <fullname>-profile-signing-cert  (tls.crt, tls.key)
   scepRACert:          ""  # default: <fullname>-scep-ra-cert  (tls.crt, tls.key); auto-generated on first startup
+  deviceMap:           ""  # default: <fullname>-device-map  (device-map.json); auto-created on first SCEP enrollment
 
 service:
   type: ClusterIP
