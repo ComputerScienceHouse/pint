@@ -74,7 +74,7 @@ func GenerateProfileHandler(log *zap.Logger, ipaClient *freeipa.Client, cfg *con
 			}
 			mc, err := profile.BuildMobileconfig(profile.MobileconfigParams{
 				SSID:                 cfg.WiFiSSID,
-				RadiusHost:           radiusHost,
+				RadiusHost:           cfg.IPAServiceHostname,
 				CACertDER:            caDER,
 				RootCACertDER:        rootCACertDER,
 				CodeSigningCACertDER: codeSigningCACertDER,
