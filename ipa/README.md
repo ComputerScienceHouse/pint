@@ -4,13 +4,14 @@ This directory contains FreeIPA resources that must be applied to the CSH IPA se
 
 ## Certificate Profiles
 
-PINT issues three types of certificates from FreeIPA, each requiring a dedicated Dogtag certificate profile to control validity period, key usage, and extended key usage. Without these profiles, PINT falls back to the CA default (2-year validity, generic extensions).
+PINT issues four types of certificates from FreeIPA, each requiring a dedicated Dogtag certificate profile to control validity period, key usage, and extended key usage. Without these profiles, PINT falls back to the CA default (2-year validity, generic extensions).
 
 | Profile | Used For | Validity | EKU |
 |---|---|---|---|
-| `pint_wifi` | EAP-TLS client certs for user devices | 5 years | clientAuth |
+| `pint_wifi` | EAP-TLS client certs for user devices | 1 year | clientAuth |
 | `pint_radsec_client` | mTLS client certs for home routers connecting to RadSec | 5 years | clientAuth |
-| `pint_radsec_server` | mTLS server cert for the FreeRADIUS RadSec listener | 90 days | serverAuth |
+| `pint_radsec_server` | Server cert for FreeRADIUS; used for both the outer RadSec TLS listener and the inner EAP-TLS authentication (two separate certs, same profile) | 90 days | serverAuth |
+| `pint_profile_signing` | CMS signing cert for iOS mobileconfig profiles | 1 year | codeSigning |
 
 The RadSec server cert is intentionally short-lived. PINT checks it every 24 hours and automatically renews it and reloads FreeRADIUS when fewer than 30 days remain, so there is no operational burden to the short validity.
 
@@ -18,59 +19,26 @@ The RadSec server cert is intentionally short-lived. PINT checks it every 24 hou
 
 FreeIPA's default certificate profile issues 2-year certs with a broad set of extensions. For WiFi and RadSec:
 
-- **Validity**: User WiFi certs and router RadSec certs should last 5 years to avoid forcing users to re-enroll their devices frequently.
+- **Validity**: User WiFi certs last 1 year; iOS/macOS renew automatically via SCEP. Router RadSec certs last 5 years to avoid frequent manual re-enrollment.
 - **EKU scoping**: Each profile enforces the minimum EKU required for its purpose. A WiFi client cert cannot be used as a RadSec server cert and vice versa.
 - **Subject enforcement**: All profiles force `O=CSH.RIT.EDU` in the subject regardless of what the CSR contains, ensuring a consistent and verifiable identity namespace.
 
-### Importing
+### Importing and Updating
 
-Profiles are imported once via the FreeIPA JSON-RPC API. You will need an account with the **Certificate Manager Agents** role or admin privileges.
-
-```bash
-# Authenticate (session cookie saved to /tmp/ipa.cookies)
-echo -n "IPA Password: "; read -s IPA_PASS; echo
-curl -c /tmp/ipa.cookies -s -o /dev/null \
-  -X POST https://ipa10-nrh.csh.rit.edu/ipa/session/login_password \
-  -H "Referer: https://ipa10-nrh.csh.rit.edu/ipa" \
-  --data-urlencode "user=$USER" \
-  --data-urlencode "password=$IPA_PASS"
-
-# Import all three profiles
-for profile in pint_wifi pint_radsec_client pint_radsec_server; do
-  echo "Importing $profile..."
-  python3 -c "
-import json
-p = open('profiles/${profile}.cfg').read()
-print(json.dumps({
-  'method': 'certprofile_import',
-  'params': [['${profile}'], {'file': p, 'ipacertprofilestoreissued': True}],
-  'id': 0
-}))
-" | curl -s -b /tmp/ipa.cookies \
-    -X POST https://ipa10-nrh.csh.rit.edu/ipa/json \
-    -H "Content-Type: application/json" \
-    -H "Referer: https://ipa10-nrh.csh.rit.edu/ipa" \
-    -d @- | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['result']['summary'] if r['error'] is None else r['error'])"
-done
-```
-
-Run this from the `ipa/` directory.
-
-### Updating an existing profile
-
-If a profile already exists and you need to update it (e.g. after changing a `.cfg` file), use `certprofile_mod` with the `file` parameter instead of `certprofile_import`:
+Use `update_profile.py` to manage profiles. It handles importing new profiles and updating existing ones via the FreeIPA JSON-RPC API. You will need an account with the **Certificate Manager Agents** role or admin privileges.
 
 ```bash
-python3 -c "
-import json
-p = open('profiles/pint_wifi.cfg').read()
-print(json.dumps({'method':'certprofile_mod','params':[['pint_wifi'],{'file':p}],'id':0}))
-" | curl -s -b /tmp/ipa.cookies \
-  -X POST https://ipa10-nrh.csh.rit.edu/ipa/json \
-  -H "Content-Type: application/json" \
-  -H "Referer: https://ipa10-nrh.csh.rit.edu/ipa" \
-  -d @-
+cd ipa
+python3 update_profile.py
 ```
+
+The script supports three actions:
+
+| Action | FreeIPA call | When to use |
+|---|---|---|
+| `update` | `certprofile_mod` | Profile already exists; push changes to `.cfg` file |
+| `show` | `certprofile_show` | Inspect what is currently deployed in FreeIPA |
+| `reimport` | `certprofile_del` + `certprofile_import` | First import, or after making structural Dogtag changes that `certprofile_mod` cannot apply |
 
 ### Wiring up in PINT
 
@@ -80,6 +48,8 @@ Once imported, set these environment variables so PINT uses the profiles when re
 PINT_IPA_CERT_PROFILE=pint_wifi
 PINT_IPA_RADSEC_CLIENT_CERT_PROFILE=pint_radsec_client
 PINT_IPA_RADSEC_SERVER_CERT_PROFILE=pint_radsec_server
+PINT_IPA_EAP_CERT_PROFILE=pint_radsec_server
+PINT_IPA_CODE_SIGNING_CERT_PROFILE=pint_profile_signing
 ```
 
-All three are optional; omitting them causes PINT to request certificates without specifying a profile, which uses the CA's default.
+All are optional with the defaults shown above. `PINT_IPA_EAP_CERT_PROFILE` controls the profile used for the EAP-TLS inner auth cert (separate from the RadSec outer TLS cert, but issued from the same profile by default). `PINT_IPA_CODE_SIGNING_CERT_PROFILE` only takes effect when `PINT_IPA_CODE_SIGNING_CA_NAME` is set.
