@@ -277,7 +277,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 
 func handleRPC(w http.ResponseWriter, r *http.Request) {
 	var req map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.UseNumber()
+	if err := dec.Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -418,8 +420,11 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 		if len(params) >= 1 {
 			args, _ := params[0].([]interface{})
 			if len(args) >= 1 {
-				if f, ok := args[0].(float64); ok {
-					serial = int64(f)
+				switch v := args[0].(type) {
+				case json.Number:
+					serial, _ = v.Int64()
+				case float64:
+					serial = int64(v)
 				}
 			}
 		}
