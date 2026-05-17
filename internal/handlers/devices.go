@@ -4,6 +4,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -26,6 +27,37 @@ type deviceView struct {
 	LastRenewedAt time.Time
 	ExpiresAt     time.Time
 	HasMapInfo    bool // false if cert predates device tracking
+}
+
+// ExpiresIn returns a human-readable relative expiry string, e.g. "11 months" or "25 days".
+func (d deviceView) ExpiresIn() string {
+	if d.ExpiresAt.IsZero() || d.IsExpired {
+		return ""
+	}
+	until := time.Until(d.ExpiresAt)
+	if until <= 0 {
+		return ""
+	}
+	days := int(until.Hours() / 24)
+	if days < 60 {
+		if days == 1 {
+			return "1 day"
+		}
+		return fmt.Sprintf("%d days", days)
+	}
+	months := int(math.Round(until.Hours() / (24 * 30.44)))
+	if months == 1 {
+		return "1 month"
+	}
+	return fmt.Sprintf("%d months", months)
+}
+
+// IsExpiringSoon returns true when the cert expires within 30 days.
+func (d deviceView) IsExpiringSoon() bool {
+	if d.ExpiresAt.IsZero() || d.IsExpired {
+		return false
+	}
+	return time.Until(d.ExpiresAt) < 30*24*time.Hour
 }
 
 type adminDeviceView struct {
@@ -110,6 +142,10 @@ func (s *Server) DevicesPage(c *gin.Context) {
 			v.LastRenewedAt = info.LastRenewedAt
 			v.ExpiresAt = info.ExpiresAt
 			v.HasMapInfo = true
+			if v.ExpiresAt.IsZero() {
+				// Device map entry predates expiry tracking; fall back to the cert itself.
+				v.ExpiresAt, _ = parseCertTime(cert.ValidNotAfter)
+			}
 		} else {
 			notAfter, timeErr := parseCertTime(cert.ValidNotAfter)
 			if timeErr != nil {
