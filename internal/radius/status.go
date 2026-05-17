@@ -224,16 +224,16 @@ func GetStatus(ctx context.Context, k8s kubernetes.Interface, metricsClient metr
 	return status, nil
 }
 
-// GetRadSecCertInfo reads the FreeRADIUS server TLS cert from the named K8s secret
+// GetCertInfo reads a PEM certificate from the named key in the named K8s Secret
 // and returns display-ready expiry information.
-func GetRadSecCertInfo(ctx context.Context, k8s kubernetes.Interface, namespace, secretName string) (*CertInfo, error) {
+func GetCertInfo(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, key string) (*CertInfo, error) {
 	secret, err := k8s.CoreV1().Secrets(namespace).Get(ctx, secretName, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("get secret %s: %w", secretName, err)
 	}
-	pemData, ok := secret.Data["tls.crt"]
+	pemData, ok := secret.Data[key]
 	if !ok {
-		return nil, fmt.Errorf("tls.crt not found in secret %s", secretName)
+		return nil, fmt.Errorf("%s not found in secret %s", key, secretName)
 	}
 	block, _ := pem.Decode(pemData)
 	if block == nil {

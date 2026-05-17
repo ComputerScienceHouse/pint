@@ -14,7 +14,7 @@
 /* Health tiles — no colored card headers; color lives on the value */
 .health-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: .75rem;
   margin-bottom: 1.5rem;
 }
@@ -325,7 +325,6 @@
 /* Responsive: collapse stat strip on small screens */
 @media (max-width: 575px) {
   .health-grid { grid-template-columns: 1fr 1fr; }
-  .health-grid > :last-child { grid-column: 1 / -1; }
   /* Row 1: Accepted / Rejected / Success%  — Row 2: errors  — Row 3: Threads */
   .stat-strip { grid-template-columns: repeat(3, 1fr); }
   .stat-cell:nth-child(4) { border-top: 1px solid var(--pint-border); border-left: 0; }
@@ -379,6 +378,16 @@
     </details>
 </div>
 {{end}}
+{{if .EAPCertError}}
+<div class="alert alert-warning">
+    <span class="mdi mdi-wifi-lock"></span>
+    <strong>Could not read EAP certificate.</strong>
+    <details class="mt-1">
+        <summary class="small text-muted" style="cursor:pointer">Technical details</summary>
+        <code class="small d-block mt-1">{{.EAPCertError}}</code>
+    </details>
+</div>
+{{end}}
 
 <!-- Health overview -->
 <div class="health-grid">
@@ -406,6 +415,22 @@
             <div class="health-tile-value text-success">{{.Cert.DaysLeft}}<span class="denom">d</span></div>
             {{end}}
             <div class="health-tile-sub">{{.Cert.Expiry}}</div>
+        {{else}}
+        <div class="health-tile-value" style="color:var(--pint-muted)">—</div>
+        {{end}}
+    </div>
+
+    <div class="health-tile">
+        <div class="health-tile-label"><span class="mdi mdi-wifi-lock"></span> EAP Cert</div>
+        {{if .EAPCert}}
+            {{if .EAPCert.IsExpired}}
+            <div class="health-tile-value text-danger">Expired</div>
+            {{else if .EAPCert.NearExpiry}}
+            <div class="health-tile-value text-warning">{{.EAPCert.DaysLeft}}<span class="denom">d left</span></div>
+            {{else}}
+            <div class="health-tile-value text-success">{{.EAPCert.DaysLeft}}<span class="denom">d</span></div>
+            {{end}}
+            <div class="health-tile-sub">{{.EAPCert.Expiry}}</div>
         {{else}}
         <div class="health-tile-value" style="color:var(--pint-muted)">—</div>
         {{end}}

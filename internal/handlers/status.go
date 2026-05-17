@@ -36,11 +36,18 @@ func StatusPageHandler(cfg *config.Config, k8s kubernetes.Interface, metricsClie
 			data["Status"] = status
 		}
 
-		certInfo, err := radius.GetRadSecCertInfo(ctx, k8s, cfg.Namespace, cfg.RadSecCertSecret)
+		certInfo, err := radius.GetCertInfo(ctx, k8s, cfg.Namespace, cfg.RadSecCertSecret, "tls.crt")
 		if err != nil {
 			data["CertError"] = err.Error()
 		} else {
 			data["Cert"] = certInfo
+		}
+
+		eapCertInfo, err := radius.GetCertInfo(ctx, k8s, cfg.Namespace, cfg.EAPCertSecret, "eap.crt")
+		if err != nil {
+			data["EAPCertError"] = err.Error()
+		} else {
+			data["EAPCert"] = eapCertInfo
 		}
 
 		store := radius.NewClientStore(k8s, cfg.Namespace, cfg.ConfigSecret)
