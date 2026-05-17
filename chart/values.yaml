@@ -91,6 +91,12 @@ freeradius:
     enabled: true
     clientCIDR: "0.0.0.0/0"  # CIDR allowed to query the status server; restrict to pod CIDR in production
     nodePort: null  # set to expose status port via NodePort (dev only; PINT queries pods directly in prod)
+  # HAProxy agent-check sidecar — pings the FreeRADIUS status server and
+  # responds up/down on TCP so HAProxy can detect backend failures without
+  # making raw RadSec connections that produce "unknown client" errors.
+  agentCheck:
+    enabled: true
+    port: 2084  # must match agent-port in the HAProxy backend config
   securityContext:
     runAsNonRoot: true
     allowPrivilegeEscalation: false

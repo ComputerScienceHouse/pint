@@ -40,6 +40,25 @@ spec:
             - name: pint-eap
               mountPath: /etc/pint/eap
               readOnly: true
+        {{- if .Values.freeradius.agentCheck.enabled }}
+        - name: radsec-agent
+          image: {{ include "pint.image" . }}
+          imagePullPolicy: {{ .Values.pint.image.pullPolicy }}
+          command: ["./radsec-agent"]
+          args:
+            - -listen=:{{ .Values.freeradius.agentCheck.port }}
+            - -status=127.0.0.1:18121
+            - -secret-file=/etc/pint/config/status-secret
+          ports:
+            - containerPort: {{ .Values.freeradius.agentCheck.port }}
+              name: agent-check
+          securityContext:
+            {{- toYaml .Values.freeradius.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: pint-config
+              mountPath: /etc/pint/config
+              readOnly: true
+        {{- end }}
       volumes:
         - name: pint-config
           secret:

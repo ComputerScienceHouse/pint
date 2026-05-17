@@ -11,11 +11,13 @@ RUN git config --system --add safe.directory '*'
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags "-X github.com/ComputerScienceHouse/pint/internal/version.GitCommit=$(git rev-parse --short HEAD)" \
     -o pint ./cmd/pint/
+RUN CGO_ENABLED=0 GOOS=linux go build -o radsec-agent ./cmd/radsec-agent/
 
 FROM alpine:3.19
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /build/pint .
+COPY --from=builder /build/radsec-agent .
 COPY --from=builder /build/templates ./templates
 
 EXPOSE 8080
