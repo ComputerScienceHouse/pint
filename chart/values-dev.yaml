@@ -8,6 +8,7 @@ pint:
 # Stub config values for dev; PINT itself runs locally so these are unused,
 # but they keep 'helm lint' and 'helm template' happy.
 config:
+  radSecProxyProtocol: false
   clientID: pint-dev
   serverURL: http://localhost:8080
   ipaHost: localhost:8088
