@@ -1,14 +1,15 @@
 # EAP-TLS module — used for WiFi user certificate authentication.
-# The server cert is shared with the RadSec listener (same FreeIPA-issued cert).
-# wifi-ca.pem is the WiFi intermediate CA; FreeRADIUS uses it to verify that
-# connecting users' EAP-TLS client certs were issued by PINT.
+# eap.crt is a separate cert issued by the wireless CA (not the RadSec CA). iOS devices
+# verify this cert using the wireless CA anchor embedded in their mobileconfig profile.
+# The outer RadSec TLS connection (tls.crt) uses a RadSec CA-issued cert verified by routers.
+# wifi-ca.pem is the WiFi CA chain; FreeRADIUS uses it to verify EAP-TLS client certs.
 eap {
     default_eap_type = tls
     timer_expire     = 60
 
     tls-config tls-csh {
-        private_key_file  = /etc/pint/radsec/tls.key
-        certificate_file  = /etc/pint/radsec/tls.crt
+        private_key_file  = /etc/pint/radsec/eap.key
+        certificate_file  = /etc/pint/radsec/eap.crt
         ca_file           = /etc/pint/radsec/wifi-ca.pem
         tls_min_version   = "1.2"
         cipher_list       = "ECDHE+AESGCM:DHE+AESGCM"

@@ -73,7 +73,12 @@
         },
         "ipaRadSecServerCertProfile": {
           "type": "string",
-          "description": "Dogtag certificate profile for the FreeRADIUS server cert.",
+          "description": "Dogtag certificate profile for the FreeRADIUS outer RadSec TLS cert (RadSec CA-issued; verified by routers).",
+          "default": "pint_radsec_server"
+        },
+        "ipaEAPCertProfile": {
+          "type": "string",
+          "description": "Dogtag certificate profile for the FreeRADIUS EAP-TLS server cert (wireless CA-issued; verified by iOS devices via mobileconfig anchor).",
           "default": "pint_radsec_server"
         },
         "ipaSkipTLSVerify": {

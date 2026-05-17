@@ -13,7 +13,11 @@ import (
 type MobileconfigParams struct {
 	SSID                 string
 	RadiusHost           string // hostname only, no port
-	CACertDER            []byte // wireless intermediate CA — anchors EAP-TLS server verification
+	CACertDER            []byte // wireless intermediate CA — anchors EAP-TLS server verification.
+	// FreeRADIUS presents a cert signed by the wireless CA for EAP-TLS (eap.crt in the
+	// radsec secret), so this CA is the correct anchor. The outer RadSec TLS cert (tls.crt)
+	// is signed by the RadSec CA and is verified by routers, not end devices.
+	// See: dev/freeradius/eap — certificate_file = /etc/pint/radsec/eap.crt.
 	RootCACertDER        []byte // root CA — always embed for full chain trust
 	CodeSigningCACertDER []byte // code-signing intermediate CA — embed when profile signing is enabled
 	Username             string
@@ -72,7 +76,7 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 		"PayloadCertificateUUID": scepUUID,
 	}
 
-	// Wireless intermediate CA — anchors EAP-TLS server verification.
+	// Wireless intermediate CA — anchors EAP-TLS server verification and embedded for chain reference.
 	caPayload := map[string]interface{}{
 		"PayloadType":        "com.apple.security.root",
 		"PayloadUUID":        caUUID,

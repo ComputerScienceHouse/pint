@@ -58,6 +58,10 @@ spec:
             - name: PINT_IPA_RADSEC_SERVER_CERT_PROFILE
               value: {{ .Values.config.ipaRadSecServerCertProfile | quote }}
             {{- end }}
+            {{- if .Values.config.ipaEAPCertProfile }}
+            - name: PINT_IPA_EAP_CERT_PROFILE
+              value: {{ .Values.config.ipaEAPCertProfile | quote }}
+            {{- end }}
             {{- if .Values.config.ipaSkipTLSVerify }}
             - name: PINT_IPA_SKIP_TLS_VERIFY
               value: "true"
