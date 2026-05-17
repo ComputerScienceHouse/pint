@@ -331,7 +331,7 @@ document.getElementById('expiredCerts')?.addEventListener('hide.bs.collapse', fu
   <div class="device-identity">
     <div class="device-name">{{$deviceName}}</div>
     <div class="device-subtitle">
-      {{- if .Platform}}<span class="device-subtitle-part">{{.Platform}}</span>{{end -}}
+      {{- if .Platform}}<span class="device-subtitle-part">{{.PlatformLabel}}</span>{{end -}}
       {{- if and .HasMapInfo (not .EnrolledAt.IsZero)}}<span class="device-subtitle-part">Enrolled {{.EnrolledAt.Format "Jan 2, 2006"}}</span>{{end -}}
       {{- if and .HasMapInfo (not (.LastRenewedAt.IsZero))}} <span class="device-subtitle-part">Renewed {{.LastRenewedAt.Format "Jan 2, 2006"}}</span>{{end -}}
       {{- if .IsSCEP}}<span class="device-subtitle-part device-renews">Renews automatically</span>{{end -}}

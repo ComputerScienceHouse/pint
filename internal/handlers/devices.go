@@ -52,6 +52,22 @@ func (d deviceView) ExpiresIn() string {
 	return fmt.Sprintf("%d months", months)
 }
 
+// PlatformLabel returns a human-readable display name for the platform.
+func (d deviceView) PlatformLabel() string {
+	switch d.Platform {
+	case "ios":
+		return "iOS / macOS"
+	case "android":
+		return "Android"
+	case "windows":
+		return "Windows"
+	case "linux":
+		return "Linux"
+	default:
+		return d.Platform
+	}
+}
+
 // IsExpiringSoon returns true when the cert expires within 30 days.
 func (d deviceView) IsExpiringSoon() bool {
 	if d.ExpiresAt.IsZero() || d.IsExpired {
