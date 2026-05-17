@@ -1,4 +1,3 @@
-// cmd/pint/certs.go — certmgr.ManagedCert implementations for PINT's managed TLS certs.
 package main
 
 import (
@@ -12,7 +11,6 @@ import (
 	"github.com/ComputerScienceHouse/pint/internal/certmgr"
 	"github.com/ComputerScienceHouse/pint/internal/config"
 	"github.com/ComputerScienceHouse/pint/internal/freeipa"
-	"github.com/ComputerScienceHouse/pint/internal/handlers"
 	"github.com/ComputerScienceHouse/pint/internal/profile"
 	"github.com/ComputerScienceHouse/pint/internal/radius"
 	internscep "github.com/ComputerScienceHouse/pint/internal/scep"
@@ -55,11 +53,10 @@ func (c *radSecServerCert) Issue(ctx context.Context, _ []byte) ([]byte, error) 
 		return nil, fmt.Errorf("cert_request radsec: %w", err)
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	keyPEM, err := profile.MarshalECKeyPEM(privKey)
 	if err != nil {
 		return nil, fmt.Errorf("marshal radsec ec key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 	if err := radius.WriteRadSecServerCert(ctx, c.k8s, c.cfg.Namespace, c.cfg.RadSecCertSecret, c.cfg.FreeRADIUSDeployment, certPEM, keyPEM, c.radSecCAPEM); err != nil {
 		return nil, fmt.Errorf("write radsec cert: %w", err)
 	}
@@ -112,24 +109,8 @@ func (c *eapServerCert) ShouldRenew(existingPEM []byte) bool {
 	return false
 }
 func (c *eapServerCert) Issue(ctx context.Context, existingPEM []byte) ([]byte, error) {
-	// Handle legacy leaf-only migration: append the CA chain without reissuing.
-	if c.cfg.EAPMigrateLegacyLeaf && len(existingPEM) > 0 {
-		block, rest := pem.Decode(existingPEM)
-		if block != nil && len(rest) == 0 {
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err == nil && time.Until(cert.NotAfter) > renewBefore && len(cert.DNSNames) > 0 {
-				secret, err := c.k8s.CoreV1().Secrets(c.cfg.Namespace).Get(ctx, c.cfg.EAPCertSecret, metav1.GetOptions{})
-				if err != nil {
-					return nil, fmt.Errorf("get eap secret for leaf migration: %w", err)
-				}
-				chainPEM := append(existingPEM, c.wifiCAPEM...)
-				if err := radius.WriteEAPServerCert(ctx, c.k8s, c.cfg.Namespace, c.cfg.EAPCertSecret, c.cfg.FreeRADIUSDeployment, chainPEM, secret.Data["eap.key"], c.wifiCAPEM); err != nil {
-					return nil, fmt.Errorf("write eap cert (leaf migration): %w", err)
-				}
-				c.log.Info("eap.crt: appended CA chain to leaf-only cert (legacy migration)")
-				return chainPEM, nil
-			}
-		}
+	if chainPEM, ok, err := c.tryMigrateLeafOnly(ctx, existingPEM); err != nil || ok {
+		return chainPEM, err
 	}
 
 	privKey, csrPEM, err := profile.GenerateKeyAndCSR(c.cfg.IPAServiceHostname, c.cfg.IPAServiceHostname)
@@ -141,31 +122,57 @@ func (c *eapServerCert) Issue(ctx context.Context, existingPEM []byte) ([]byte, 
 		return nil, fmt.Errorf("cert_request eap: %w", err)
 	}
 	chainPEM := append(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}), c.wifiCAPEM...)
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	keyPEM, err := profile.MarshalECKeyPEM(privKey)
 	if err != nil {
 		return nil, fmt.Errorf("marshal eap ec key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 	if err := radius.WriteEAPServerCert(ctx, c.k8s, c.cfg.Namespace, c.cfg.EAPCertSecret, c.cfg.FreeRADIUSDeployment, chainPEM, keyPEM, c.wifiCAPEM); err != nil {
 		return nil, fmt.Errorf("write eap cert: %w", err)
 	}
 	return chainPEM, nil
+}
+
+// tryMigrateLeafOnly appends the WiFi CA chain to a leaf-only EAP cert without reissuing.
+// Returns (chainPEM, true, nil) on success, (nil, false, nil) when migration doesn't apply,
+// or (nil, false, err) on failure.
+func (c *eapServerCert) tryMigrateLeafOnly(ctx context.Context, existingPEM []byte) ([]byte, bool, error) {
+	if !c.cfg.EAPMigrateLegacyLeaf || len(existingPEM) == 0 {
+		return nil, false, nil
+	}
+	block, rest := pem.Decode(existingPEM)
+	if block == nil || len(rest) > 0 {
+		return nil, false, nil
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil || time.Until(cert.NotAfter) <= renewBefore || len(cert.DNSNames) == 0 {
+		return nil, false, nil
+	}
+	secret, err := c.k8s.CoreV1().Secrets(c.cfg.Namespace).Get(ctx, c.cfg.EAPCertSecret, metav1.GetOptions{})
+	if err != nil {
+		return nil, false, fmt.Errorf("get eap secret for leaf migration: %w", err)
+	}
+	chainPEM := append(existingPEM, c.wifiCAPEM...)
+	if err := radius.WriteEAPServerCert(ctx, c.k8s, c.cfg.Namespace, c.cfg.EAPCertSecret, c.cfg.FreeRADIUSDeployment, chainPEM, secret.Data["eap.key"], c.wifiCAPEM); err != nil {
+		return nil, false, fmt.Errorf("write eap cert (leaf migration): %w", err)
+	}
+	c.log.Info("eap.crt: appended CA chain to leaf-only cert (legacy migration)")
+	return chainPEM, true, nil
 }
 func (c *eapServerCert) AfterRenew(_ context.Context, _ []byte) error { return nil }
 
 // ── Profile signing cert ──────────────────────────────────────────────────────
 
 type profileSigningCert struct {
-	log                *zap.Logger
-	ipaClient          *freeipa.Client
-	cfg                *config.Config
-	k8s                kubernetes.Interface
+	log                  *zap.Logger
+	ipaClient            *freeipa.Client
+	cfg                  *config.Config
+	k8s                  kubernetes.Interface
 	codeSigningCACertDER []byte
-	srv                *handlers.Server // for hot-swapping the signer
+	onRenew              func(*profile.Signer) // called after renewal to hot-swap in-memory signer
 }
 
-func newProfileSigningCert(log *zap.Logger, ipa *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, codeSigningCACertDER []byte, srv *handlers.Server) certmgr.ManagedCert {
-	return &profileSigningCert{log: log, ipaClient: ipa, cfg: cfg, k8s: k8s, codeSigningCACertDER: codeSigningCACertDER, srv: srv}
+func newProfileSigningCert(log *zap.Logger, ipa *freeipa.Client, cfg *config.Config, k8s kubernetes.Interface, codeSigningCACertDER []byte, onRenew func(*profile.Signer)) certmgr.ManagedCert {
+	return &profileSigningCert{log: log, ipaClient: ipa, cfg: cfg, k8s: k8s, codeSigningCACertDER: codeSigningCACertDER, onRenew: onRenew}
 }
 
 func (c *profileSigningCert) Name() string { return "profile signing" }
@@ -185,11 +192,10 @@ func (c *profileSigningCert) Issue(ctx context.Context, _ []byte) ([]byte, error
 		return nil, fmt.Errorf("cert_request (profile signing): %w", err)
 	}
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	keyPEM, err := profile.MarshalECKeyPEM(privKey)
 	if err != nil {
 		return nil, fmt.Errorf("marshal profile signing ec key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
 	signingSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: c.cfg.ProfileSigningCertSecret, Namespace: c.cfg.Namespace},
@@ -209,16 +215,15 @@ func (c *profileSigningCert) AfterRenew(ctx context.Context, certPEM []byte) err
 	if err != nil {
 		return fmt.Errorf("build signer: %w", err)
 	}
-	c.srv.Signer.Store(signer)
+	c.onRenew(signer)
 	c.log.Info("profile signing cert hot-swapped in memory")
 	return nil
 }
 
 // ── SCEP RA cert ──────────────────────────────────────────────────────────────
 
-// loadOrGenerateSCEPRACert loads the SCEP RA cert from the K8s secret, generating a new
-// self-signed RSA cert if none exists. Returns the parsed cert, key, and raw DER bytes.
-// The SCEP RA cert is self-signed and does not expire in normal operation; no watcher is needed.
+// loadOrGenerateSCEPRACert loads or generates the self-signed SCEP RA cert.
+// The cert does not expire in normal operation; no renewal watcher is needed.
 func loadOrGenerateSCEPRACert(ctx context.Context, log *zap.Logger, k8sClient kubernetes.Interface, cfg *config.Config) (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
 	secret, err := k8sClient.CoreV1().Secrets(cfg.Namespace).Get(ctx, cfg.SCEPRACertSecret, metav1.GetOptions{})
 	if err == nil {
@@ -251,7 +256,6 @@ func loadOrGenerateSCEPRACert(ctx context.Context, log *zap.Logger, k8sClient ku
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-// shouldRenewPEM returns true when existingPEM is absent, unparseable, or expires within d.
 func shouldRenewPEM(existingPEM []byte, d time.Duration) bool {
 	if len(existingPEM) == 0 {
 		return true
@@ -267,7 +271,6 @@ func shouldRenewPEM(existingPEM []byte, d time.Duration) bool {
 	return time.Until(cert.NotAfter) <= d
 }
 
-// profileSignerFromPEM builds a profile.Signer from PEM-encoded cert and EC key.
 func profileSignerFromPEM(certPEM, keyPEM, codeSigningCACertDER []byte) (*profile.Signer, error) {
 	block, _ := pem.Decode(certPEM)
 	if block == nil {
@@ -296,7 +299,6 @@ func profileSignerFromPEM(certPEM, keyPEM, codeSigningCACertDER []byte) (*profil
 	return s, nil
 }
 
-// logCACert logs expiry info for a CA cert.
 func logCACert(log *zap.Logger, name string, der []byte) {
 	cert, err := x509.ParseCertificate(der)
 	if err != nil {
@@ -311,7 +313,6 @@ func logCACert(log *zap.Logger, name string, der []byte) {
 	)
 }
 
-// formatDuration formats a duration as human-readable days (or "EXPIRED").
 func formatDuration(d time.Duration) string {
 	if d < 0 {
 		return "EXPIRED"

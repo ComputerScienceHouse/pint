@@ -28,11 +28,11 @@ type DeviceInfo struct {
 }
 
 // DeviceMap is a Kubernetes-Secret-backed map of cert serial → DeviceInfo.
-// A process-local mutex serializes concurrent writes within the same replica.
-// Cross-replica conflicts are handled via Kubernetes resourceVersion optimistic concurrency:
-// each write reads the current secret, modifies it, and retries on 409 Conflict.
+// A process-local RWMutex serializes concurrent writes within the same replica; reads
+// acquire only a read lock. Cross-replica conflicts are handled via Kubernetes
+// resourceVersion optimistic concurrency: each write reads, modifies, and retries on 409.
 type DeviceMap struct {
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	k8s        kubernetes.Interface
 	namespace  string
 	secretName string
@@ -53,8 +53,8 @@ func (m *DeviceMap) Set(ctx context.Context, serial string, info DeviceInfo) err
 
 // Get returns the DeviceInfo for a single cert serial number.
 func (m *DeviceMap) Get(ctx context.Context, serial string) (DeviceInfo, bool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	_, entries, err := m.loadSecret(ctx)
 	if err != nil {
 		return DeviceInfo{}, false, err
@@ -65,8 +65,8 @@ func (m *DeviceMap) Get(ctx context.Context, serial string) (DeviceInfo, bool, e
 
 // All returns a copy of the full serial → DeviceInfo map.
 func (m *DeviceMap) All(ctx context.Context) (map[string]DeviceInfo, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	_, entries, err := m.loadSecret(ctx)
 	return entries, err
 }

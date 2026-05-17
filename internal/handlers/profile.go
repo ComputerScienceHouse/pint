@@ -5,8 +5,8 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/ComputerScienceHouse/pint/internal/devicemap"
@@ -39,7 +39,7 @@ func (s *Server) GenerateProfile(c *gin.Context) {
 		return
 	}
 
-	radiusHost := strings.Split(s.Cfg.RadiusServer, ":")[0]
+	radiusHost, _, _ := net.SplitHostPort(s.Cfg.RadiusServer)
 	switch platform {
 	case "windows":
 		wlan, err := profile.BuildWLANProfile(profile.WLANProfileParams{

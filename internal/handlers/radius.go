@@ -188,8 +188,7 @@ func (s *Server) radiusPageData(c *gin.Context, nav navInfo, client *radius.Radi
 	return data
 }
 
-// commitStore saves the store, writes the RADIUS config, and reloads FreeRADIUS.
-// On any error it writes a JSON error response and returns non-nil so callers can return.
+// On any error it writes a JSON error response and returns non-nil so callers can return immediately.
 func (s *Server) commitStore(c *gin.Context, store *radius.ClientStore) error {
 	ctx := c.Request.Context()
 	if err := store.Save(ctx); err != nil {
@@ -246,11 +245,10 @@ func (s *Server) issueClientCredentials(username, principal string) (*radius.Rad
 	}
 
 	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
-	ecKeyBytes, err := x509.MarshalECPrivateKey(privKey)
+	keyPEM, err := profile.MarshalECKeyPEM(privKey)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("marshal ec key: %w", err)
 	}
-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: ecKeyBytes})
 
 	return entry, string(keyPEM), string(certPEM), nil
 }
@@ -294,11 +292,11 @@ func parseIPCIDR(c *gin.Context) (string, bool) {
 	if raw == "" {
 		return "", true
 	}
-	if _, err := netip.ParsePrefix(raw); err != nil {
-		if _, err2 := netip.ParseAddr(raw); err2 != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "ip_cidr must be a valid IP address or CIDR prefix"})
-			return "", false
-		}
+	_, prefixErr := netip.ParsePrefix(raw)
+	_, addrErr := netip.ParseAddr(raw)
+	if prefixErr != nil && addrErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ip_cidr must be a valid IP address or CIDR prefix"})
+		return "", false
 	}
 	return raw, true
 }

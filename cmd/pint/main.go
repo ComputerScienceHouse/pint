@@ -166,7 +166,7 @@ func main() {
 	mgr.Register(newRadSecServerCert(log, ipaClient, cfg, k8sClient, []byte(radSecCAChainPEM)))
 	mgr.Register(newEAPServerCert(log, ipaClient, cfg, k8sClient, wifiCAPEM))
 	if cfg.CodeSigningCAName != "" {
-		mgr.Register(newProfileSigningCert(log, ipaClient, cfg, k8sClient, codeSigningCACertDER, srv))
+		mgr.Register(newProfileSigningCert(log, ipaClient, cfg, k8sClient, codeSigningCACertDER, srv.Signer.Store))
 	}
 	if err := mgr.RunOnce(ctx); err != nil {
 		log.Fatal("cert manager startup failed", zap.Error(err))

@@ -114,8 +114,7 @@ func (s *Server) Readyz(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// log returns the server logger, falling back to a no-op logger when unset.
-// This allows tests to create a Server without a logger.
+// log returns the server logger, falling back to a no-op so tests can omit it.
 func (s *Server) log() *zap.Logger {
 	if s.Log != nil {
 		return s.Log

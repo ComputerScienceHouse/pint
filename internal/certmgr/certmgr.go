@@ -5,6 +5,7 @@ package certmgr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -44,23 +45,20 @@ func New(log *zap.Logger, k8s kubernetes.Interface) *Manager {
 	return &Manager{log: log, k8s: k8s}
 }
 
-// Register adds c to the set of managed certs.
 func (m *Manager) Register(c ManagedCert) {
 	m.certs = append(m.certs, c)
 }
 
 // RunOnce checks every registered cert and issues any that ShouldRenew.
-// Returns the first error encountered; subsequent certs are still checked.
+// Returns all errors encountered joined together.
 func (m *Manager) RunOnce(ctx context.Context) error {
-	var first error
+	var errs []error
 	for _, c := range m.certs {
 		if err := m.checkAndRenew(ctx, c); err != nil {
-			if first == nil {
-				first = fmt.Errorf("certmgr %s: %w", c.Name(), err)
-			}
+			errs = append(errs, fmt.Errorf("certmgr %s: %w", c.Name(), err))
 		}
 	}
-	return first
+	return errors.Join(errs...)
 }
 
 // Watch loops forever, rechecking every cert every ~24 h with up to 30 min of per-cert

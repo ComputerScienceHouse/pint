@@ -37,6 +37,15 @@ func GenerateKeyAndCSR(commonName string, dnsNames ...string) (*ecdsa.PrivateKey
 	return key, csrPEM, nil
 }
 
+// MarshalECKeyPEM encodes key as a PEM-encoded EC PRIVATE KEY block.
+func MarshalECKeyPEM(key *ecdsa.PrivateKey) ([]byte, error) {
+	der, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		return nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), nil
+}
+
 // RandomPassword generates a 32-character hex password for PKCS#12 archives.
 func RandomPassword() (string, error) {
 	b := make([]byte, 16)
