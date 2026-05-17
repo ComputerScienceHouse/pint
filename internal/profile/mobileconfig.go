@@ -42,7 +42,7 @@ func BuildMobileconfig(p MobileconfigParams) ([]byte, error) {
 		"Subject":       [][][]string{{{"CN", p.Username}}},
 		"Challenge":     p.SCEPChallenge,
 		"KeyType":       "RSA",
-		"KeySize":       2048,
+		"Keysize":       2048,
 		"KeyUsage":      1, // digitalSignature
 		"CAFingerprint": raFingerprint[:],
 	}
