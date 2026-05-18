@@ -180,7 +180,7 @@
             "pullPolicy": {
               "type": "string",
               "enum": ["Always", "IfNotPresent", "Never"],
-              "default": "IfNotPresent"
+              "default": "Always"
             }
           }
         }
@@ -225,7 +225,7 @@
             "pullPolicy": {
               "type": "string",
               "enum": ["Always", "IfNotPresent", "Never"],
-              "default": "IfNotPresent"
+              "default": "Always"
             }
           }
         },

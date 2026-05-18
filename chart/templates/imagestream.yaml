@@ -8,7 +8,7 @@ metadata:
     {{- include "pint.labels" . | nindent 4 }}
 spec:
   lookupPolicy:
-    local: false
+    local: true
 {{- if .Values.freeradius.enabled }}
 ---
 apiVersion: image.openshift.io/v1
@@ -20,6 +20,6 @@ metadata:
     {{- include "pint.freeradiusLabels" . | nindent 4 }}
 spec:
   lookupPolicy:
-    local: false
+    local: true
 {{- end }}
 {{- end }}

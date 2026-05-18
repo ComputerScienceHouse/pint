@@ -11,7 +11,7 @@ pint:
   image:
     repository: pint
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 
 # Non-sensitive PINT application configuration rendered into a ConfigMap.
 # Sensitive values (PINT_CLIENT_SECRET, PINT_IPA_PASSWORD) must still be
@@ -80,7 +80,7 @@ freeradius:
   image:
     repository: pint-freeradius
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: NodePort
     nodePort: null
