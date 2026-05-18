@@ -169,7 +169,12 @@ func (s *Server) DevicesPage(c *gin.Context) {
 			if timeErr != nil {
 				s.log().Warn("devices: unparseable cert time", zap.String("value", cert.ValidNotAfter), zap.Error(timeErr))
 			}
+			notBefore, timeErr := parseCertTime(cert.ValidNotBefore)
+			if timeErr != nil {
+				s.log().Warn("devices: unparseable cert time", zap.String("value", cert.ValidNotBefore), zap.Error(timeErr))
+			}
 			v.DeviceName = "Unknown device"
+			v.EnrolledAt = notBefore
 			v.ExpiresAt = notAfter
 		}
 		if !v.ExpiresAt.IsZero() && v.ExpiresAt.Before(time.Now()) {
