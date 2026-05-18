@@ -86,7 +86,8 @@ type adminDeviceView struct {
 }
 
 // certTimeFormats are tried in order when parsing valid_not_after from FreeIPA.
-var certTimeFormats = []string{time.RFC3339, "20060102150405Z", "20060102150405-0700"}
+// FreeIPA returns dates as "Mon Jan 02 15:04:05 2006 MST" (Python %a %b %d %H:%M:%S %Y %Z).
+var certTimeFormats = []string{time.RFC3339, "Mon Jan 02 15:04:05 2006 MST", "20060102150405Z", "20060102150405-0700"}
 
 func parseCertTime(s string) (time.Time, error) {
 	for _, layout := range certTimeFormats {

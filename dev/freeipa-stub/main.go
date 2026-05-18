@@ -384,7 +384,7 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 			}
 			results = append(results, map[string]interface{}{
 				"serial_number":   rec.SerialNumber,
-				"valid_not_after": rec.ValidNotAfter.UTC().Format(time.RFC3339),
+				"valid_not_after": rec.ValidNotAfter.UTC().Format("Mon Jan 02 15:04:05 2006 MST"),
 				"revoked":         rec.Revoked,
 			})
 		}
@@ -398,12 +398,12 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 			results = append(results,
 				map[string]interface{}{
 					"serial_number":   int64(1),
-					"valid_not_after": time.Now().Add(300 * 24 * time.Hour).UTC().Format(time.RFC3339),
+					"valid_not_after": time.Now().Add(300 * 24 * time.Hour).UTC().Format("Mon Jan 02 15:04:05 2006 MST"),
 					"revoked":         false,
 				},
 				map[string]interface{}{
 					"serial_number":   int64(2),
-					"valid_not_after": time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339),
+					"valid_not_after": time.Now().Add(-24 * time.Hour).UTC().Format("Mon Jan 02 15:04:05 2006 MST"),
 					"revoked":         false,
 				},
 			)
