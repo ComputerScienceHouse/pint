@@ -1,0 +1,73 @@
+{{- if .Values.openshift.build.enabled }}
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: {{ include "pint.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.labels" . | nindent 4 }}
+  annotations:
+    app.openshift.io/vcs-ref: {{ .Values.openshift.build.gitRef | quote }}
+    app.openshift.io/vcs-uri: {{ .Values.openshift.build.gitRepo | quote }}
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: {{ printf "%s:%s" .Values.openshift.build.imageStreamName .Values.pint.image.tag | quote }}
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 2
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  source:
+    type: Git
+    git:
+      uri: {{ .Values.openshift.build.gitRepo | quote }}
+      ref: {{ .Values.openshift.build.gitRef | quote }}
+    contextDir: /
+  triggers:
+    - type: ConfigChange
+    - type: GitHub
+      github:
+        secretReference:
+          name: {{ .Values.openshift.build.webhookSecret | quote }}
+  runPolicy: Serial
+{{- if .Values.freeradius.enabled }}
+---
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: {{ include "pint.freeradiusFullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.freeradiusLabels" . | nindent 4 }}
+  annotations:
+    app.openshift.io/vcs-ref: {{ .Values.openshift.build.gitRef | quote }}
+    app.openshift.io/vcs-uri: {{ .Values.openshift.build.gitRepo | quote }}
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: {{ printf "%s:%s" .Values.openshift.build.freeradiusImageStreamName .Values.freeradius.image.tag | quote }}
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 2
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  source:
+    type: Git
+    git:
+      uri: {{ .Values.openshift.build.gitRepo | quote }}
+      ref: {{ .Values.openshift.build.gitRef | quote }}
+    contextDir: /dev/freeradius
+  triggers:
+    - type: ConfigChange
+    - type: GitHub
+      github:
+        secretReference:
+          name: {{ .Values.openshift.build.webhookSecret | quote }}
+  runPolicy: Serial
+{{- end }}
+{{- end }}

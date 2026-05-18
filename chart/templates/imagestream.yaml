@@ -1,0 +1,25 @@
+{{- if and .Values.openshift.build.enabled .Values.openshift.build.manageImageStream }}
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: {{ .Values.openshift.build.imageStreamName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.labels" . | nindent 4 }}
+spec:
+  lookupPolicy:
+    local: false
+{{- if .Values.freeradius.enabled }}
+---
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: {{ .Values.openshift.build.freeradiusImageStreamName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pint.freeradiusLabels" . | nindent 4 }}
+spec:
+  lookupPolicy:
+    local: false
+{{- end }}
+{{- end }}

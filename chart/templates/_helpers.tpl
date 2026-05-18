@@ -32,7 +32,7 @@ Standard Helm labels / selector labels for the PINT pod.
 {{- define "pint.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{ include "pint.selectorLabels" . }}
-app.kubernetes.io/version: {{ default .Chart.AppVersion .Values.pint.image.tag | quote }}
+app.kubernetes.io/version: {{ .Values.pint.image.tag | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
@@ -86,7 +86,7 @@ so it always matches these labels exactly.
 {{- define "pint.freeradiusLabels" -}}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{ include "pint.freeradiusSelectorLabels" . }}
-app.kubernetes.io/version: {{ default .Chart.AppVersion .Values.freeradius.image.tag | quote }}
+app.kubernetes.io/version: {{ .Values.freeradius.image.tag | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
@@ -103,9 +103,9 @@ app.kubernetes.io/name={{ include "pint.freeradiusFullname" . }},app.kubernetes.
 Container image references: tag falls back to Chart.appVersion.
 */}}
 {{- define "pint.image" -}}
-{{ .Values.pint.image.repository }}:{{ default .Chart.AppVersion .Values.pint.image.tag }}
+{{ .Values.pint.image.repository }}:{{ .Values.pint.image.tag }}
 {{- end }}
 
 {{- define "pint.freeradiusImage" -}}
-{{ .Values.freeradius.image.repository }}:{{ default .Chart.AppVersion .Values.freeradius.image.tag }}
+{{ .Values.freeradius.image.repository }}:{{ .Values.freeradius.image.tag }}
 {{- end }}

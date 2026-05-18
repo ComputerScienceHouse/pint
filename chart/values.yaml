@@ -10,7 +10,7 @@ pint:
   enabled: true
   image:
     repository: pint
-    tag: ""  # defaults to Chart.appVersion
+    tag: "latest"
     pullPolicy: IfNotPresent
 
 # Non-sensitive PINT application configuration rendered into a ConfigMap.
@@ -79,7 +79,7 @@ freeradius:
   enabled: true
   image:
     repository: pint-freeradius
-    tag: ""  # defaults to Chart.appVersion
+    tag: "latest"
     pullPolicy: IfNotPresent
   service:
     type: NodePort
@@ -109,3 +109,20 @@ openshift:
   enabled: false
   route:
     host: ""
+
+  # OpenShift BuildConfig and ImageStream management.
+  # When enabled, the chart creates BuildConfigs that build pint and freeradius
+  # images from source and push them to internal ImageStreamTags.  The Deployments
+  # are annotated so OpenShift rolls them out automatically when a new image lands.
+  build:
+    enabled: false
+    gitRepo: "https://github.com/ComputerScienceHouse/pint.git"
+    gitRef: ""  # branch/tag to build from (e.g. "dev" or "main")
+    webhookSecret: "github-webhook-secret"  # Secret name containing the GitHub webhook secret
+
+    # Set true in exactly one release to own the shared ImageStream objects.
+    # Both dev and prod BuildConfigs push to the same ImageStreams (different tags),
+    # so only one release should create/delete them.
+    manageImageStream: false
+    imageStreamName: "pint"
+    freeradiusImageStreamName: "freeradius"

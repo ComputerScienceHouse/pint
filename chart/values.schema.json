@@ -174,7 +174,8 @@
             },
             "tag": {
               "type": "string",
-              "description": "Image tag. Defaults to the chart appVersion."
+              "description": "Image tag.",
+              "default": "latest"
             },
             "pullPolicy": {
               "type": "string",
@@ -218,7 +219,8 @@
             },
             "tag": {
               "type": "string",
-              "description": "Image tag. Defaults to the chart appVersion."
+              "description": "Image tag.",
+              "default": "latest"
             },
             "pullPolicy": {
               "type": "string",
@@ -284,6 +286,46 @@
             "host": {
               "type": "string",
               "description": "Route hostname. Omit for an auto-assigned hostname."
+            }
+          }
+        },
+        "build": {
+          "type": "object",
+          "description": "OpenShift BuildConfig and ImageStream management.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Create BuildConfigs and wire image-change triggers on the Deployments.",
+              "default": false
+            },
+            "gitRepo": {
+              "type": "string",
+              "description": "Git repository URL for source builds.",
+              "default": "https://github.com/ComputerScienceHouse/pint.git"
+            },
+            "gitRef": {
+              "type": "string",
+              "description": "Git branch or tag to build from (e.g. 'dev' or 'main')."
+            },
+            "webhookSecret": {
+              "type": "string",
+              "description": "Name of the Secret containing the GitHub webhook secret.",
+              "default": "github-webhook-secret"
+            },
+            "manageImageStream": {
+              "type": "boolean",
+              "description": "Create/own the shared ImageStream objects. Set true in exactly one release (typically prod).",
+              "default": false
+            },
+            "imageStreamName": {
+              "type": "string",
+              "description": "Name of the ImageStream for the pint application image.",
+              "default": "pint"
+            },
+            "freeradiusImageStreamName": {
+              "type": "string",
+              "description": "Name of the ImageStream for the freeradius image.",
+              "default": "freeradius"
             }
           }
         }
