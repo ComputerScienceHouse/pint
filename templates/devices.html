@@ -280,6 +280,45 @@
   <input type="hidden" name="serial" id="revokeSerial">
 </form>
 
+<!-- Edit device modal -->
+<div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="editModalLabel">Edit device</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="editForm" method="POST" action="/devices/edit">
+        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+        <input type="hidden" name="serial" id="editSerial">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="editDeviceName" class="form-label fw-semibold">Device name</label>
+            <input type="text" class="form-control" id="editDeviceName" name="device_name"
+                   maxlength="64" placeholder="My laptop" autocomplete="off">
+          </div>
+          <div class="mb-1">
+            <label for="editPlatform" class="form-label fw-semibold">Platform</label>
+            <select class="form-select" id="editPlatform" name="platform" required>
+              <option value="" disabled>Select a platform&hellip;</option>
+              <option value="ios">iOS / macOS</option>
+              <option value="android">Android</option>
+              <option value="windows">Windows</option>
+              <option value="linux">Linux</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <span class="mdi mdi-content-save-outline me-1"></span> Save changes
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {{end}}
 {{define "scripts"}}
 <script>
@@ -297,6 +336,18 @@ function confirmRevoke(serial, deviceName) {
 document.getElementById('revokeConfirm').addEventListener('click', function() {
     document.getElementById('revokeForm').submit();
 });
+
+let _editModal = null;
+
+function openEditModal(serial, deviceName, platform) {
+    document.getElementById('editSerial').value = serial;
+    document.getElementById('editDeviceName').value = deviceName === 'Unknown device' ? '' : deviceName;
+    document.getElementById('editPlatform').value = platform || '';
+    if (!_editModal) {
+        _editModal = new bootstrap.Modal(document.getElementById('editModal'));
+    }
+    _editModal.show();
+}
 
 document.getElementById('expiredCerts')?.addEventListener('show.bs.collapse', function() {
     const btn = document.querySelector('[data-bs-target="#expiredCerts"]');
@@ -320,6 +371,7 @@ document.getElementById('expiredCerts')?.addEventListener('hide.bs.collapse', fu
 {{- else if eq .Platform "android"}}{{$platformIcon = "mdi-android"}}
 {{- else if eq .Platform "windows"}}{{$platformIcon = "mdi-microsoft-windows"}}
 {{- else if eq .Platform "linux"}}{{$platformIcon = "mdi-linux"}}{{end}}
+{{/* openEditModal() checks for this exact string to blank the name input for unknown devices. */}}
 {{$deviceName := "Unknown device"}}
 {{if .DeviceName}}{{$deviceName = .DeviceName}}{{end}}
 <div class="device-card {{$platformClass}}{{if .IsExpired}} cert-expired{{end}}">
@@ -367,6 +419,15 @@ document.getElementById('expiredCerts')?.addEventListener('hide.bs.collapse', fu
           </div>
         </li>
         <li><hr class="dropdown-divider"></li>
+        <li>
+          <button class="dropdown-item" type="button"
+                  data-serial="{{.Serial}}"
+                  data-device-name="{{$deviceName}}"
+                  data-platform="{{.Platform}}"
+                  onclick="openEditModal(this.dataset.serial, this.dataset.deviceName, this.dataset.platform)">
+            <span class="mdi mdi-pencil-outline me-1"></span> Edit device
+          </button>
+        </li>
         <li>
           <button class="dropdown-item text-danger" type="button"
                   data-serial="{{.Serial}}"

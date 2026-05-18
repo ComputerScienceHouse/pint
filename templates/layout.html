@@ -113,7 +113,7 @@
 
         code { color: var(--pint-code-color); background-color: var(--pint-code-bg); }
 
-        .form-control, textarea.form-control {
+        .form-control, textarea.form-control, .form-select {
           background-color: var(--pint-input-bg);
           border-color: var(--pint-input-border);
           color: var(--pint-text);
@@ -121,7 +121,7 @@
         .form-control[readonly], textarea.form-control[readonly] {
           background-color: var(--pint-input-bg-ro);
         }
-        .form-control:focus {
+        .form-control:focus, .form-select:focus {
           background-color: var(--pint-input-bg);
           color: var(--pint-text);
           border-color: var(--bs-primary);
@@ -154,6 +154,16 @@
         .dropdown-item { color: var(--pint-text); }
         .dropdown-item:hover, .dropdown-item:focus { background-color: var(--pint-surface-raised); color: var(--bs-white); }
 
+        .alert-success {
+          background-color: rgba(var(--bs-success-rgb), .1);
+          border-color: rgba(var(--bs-success-rgb), .25);
+          color: var(--bs-success);
+        }
+        .alert-danger {
+          background-color: rgba(var(--bs-danger-rgb), .1);
+          border-color: rgba(var(--bs-danger-rgb), .25);
+          color: var(--bs-danger);
+        }
         .alert-warning {
           background-color: rgba(var(--bs-warning-rgb), .1);
           border-color: rgba(var(--bs-warning-rgb), .25);

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"sync"
@@ -241,6 +242,96 @@ func (s *Server) RevokeDevice(c *gin.Context) {
 
 	s.log().Info("devices: cert revoked", zap.String("username", username), zap.Int64("serial", serial))
 	setFlash(c, flashSuccess, "Certificate revoked successfully.")
+	c.Redirect(http.StatusFound, "/devices")
+}
+
+var validPlatforms = []string{"ios", "android", "windows", "linux"}
+
+// EditDevice serves POST /devices/edit — self-service rename/platform update.
+func (s *Server) EditDevice(c *gin.Context) {
+	username, ok := getUsername(c)
+	if !ok {
+		s.fail(c, http.StatusUnauthorized, "not authenticated", nil)
+		return
+	}
+
+	serialStr := c.PostForm("serial")
+	if serialStr == "" {
+		setFlash(c, flashError, "Invalid serial number.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	name := c.PostForm("device_name")
+	if len(name) > 64 {
+		setFlash(c, flashError, "Device name must be 64 characters or fewer.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	platform := c.PostForm("platform")
+	if !slices.Contains(validPlatforms, platform) {
+		setFlash(c, flashError, "Invalid platform.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	serial, parseErr := strconv.ParseInt(serialStr, 10, 64)
+	if parseErr != nil {
+		setFlash(c, flashError, "Invalid serial number.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	certList, err := s.IPA.CertFind(username, s.Cfg.IPAWirelessCAName)
+	if err != nil {
+		s.log().Error("devices: cert_find failed during edit", zap.String("username", username), zap.Error(err))
+		setFlash(c, flashError, "Could not verify certificate ownership.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+	owned := false
+	for _, cert := range certList {
+		if cert.SerialNumber == serial {
+			owned = true
+			break
+		}
+	}
+	if !owned {
+		s.log().Warn("devices: edit attempt for unowned cert", zap.String("username", username), zap.Int64("serial", serial))
+		setFlash(c, flashError, "Certificate not found.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	info, _, err := s.DM.Get(c.Request.Context(), serialStr)
+	if err != nil {
+		s.log().Error("devices: device map get failed during edit", zap.String("serial", serialStr), zap.Error(err))
+		setFlash(c, flashError, "Could not load device. Please try again.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	if info.Username == "" {
+		info.Username = username
+	} else if info.Username != username {
+		s.log().Warn("devices: edit attempt for cert with mismatched map owner",
+			zap.String("requester", username), zap.String("owner", info.Username), zap.Int64("serial", serial))
+		setFlash(c, flashError, "Certificate not found.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+	info.DeviceName = name
+	info.Platform = platform
+	if err := s.DM.Set(c.Request.Context(), serialStr, info); err != nil {
+		s.log().Error("devices: device map set failed during edit", zap.String("serial", serialStr), zap.Error(err))
+		setFlash(c, flashError, "Could not save changes. Please try again.")
+		c.Redirect(http.StatusFound, "/devices")
+		return
+	}
+
+	s.log().Info("devices: device edited", zap.String("username", username), zap.Int64("serial", serial))
+	setFlash(c, flashSuccess, "Device updated successfully.")
 	c.Redirect(http.StatusFound, "/devices")
 }
 

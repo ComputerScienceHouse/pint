@@ -72,6 +72,7 @@ func (s *Server) Routes(r *gin.Engine, authMiddleware gin.HandlerFunc) {
 		protected.GET("/profile/ca", s.CADownload)
 		protected.GET("/profile/scep-challenge", s.SCEPChallenge)
 		protected.GET("/devices", s.DevicesPage)
+		protected.POST("/devices/edit", s.EditDevice)
 		protected.POST("/devices/revoke", s.RevokeDevice)
 		protected.GET("/radius", s.RadiusPage)
 		protected.POST("/radius/secret", s.SaveSecret)
