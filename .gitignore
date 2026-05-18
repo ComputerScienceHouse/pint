@@ -5,3 +5,4 @@ dev/freeipa-stub/data/
 .claude/
 docs/
 signing_certificates/
+.impeccable.md
