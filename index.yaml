@@ -3,6 +3,17 @@ entries:
   pint:
   - apiVersion: v2
     appVersion: 0.1.0
+    created: "2026-05-18T19:41:01.680092153Z"
+    description: Pouring IPA for Network Trust - CSH WiFi EAP-TLS enrollment and home
+      RadSec management
+    digest: fbaabc7aba951624501cc9c6853a43e546b6716c7213e9b376dfaae827cf4e6b
+    name: pint
+    type: application
+    urls:
+    - https://github.com/ComputerScienceHouse/pint/releases/download/pint-0.3.2/pint-0.3.2.tgz
+    version: 0.3.2
+  - apiVersion: v2
+    appVersion: 0.1.0
     created: "2026-05-18T19:34:53.505189181Z"
     description: Pouring IPA for Network Trust - CSH WiFi EAP-TLS enrollment and home
       RadSec management
@@ -353,4 +364,4 @@ entries:
     urls:
     - https://github.com/ComputerScienceHouse/pint/releases/download/pint-0.1.0-dev.3/pint-0.1.0-dev.3.tgz
     version: 0.1.0-dev.3
-generated: "2026-05-18T19:34:53.505488392Z"
+generated: "2026-05-18T19:41:01.680682428Z"
