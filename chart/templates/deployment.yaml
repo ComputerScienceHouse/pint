@@ -8,7 +8,7 @@ metadata:
     {{- include "pint.labels" . | nindent 4 }}
   {{- if .Values.openshift.build.enabled }}
   annotations:
-    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"{{ .Values.openshift.build.imageStreamName }}:{{ .Values.pint.image.tag }}","namespace":"{{ .Release.Namespace }}"},"fieldPath":"spec.template.spec.containers[?(@.name==\"pint\")].image","paused":"false"}]'
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"{{ .Values.openshift.build.imageStreamName }}:{{ .Values.pint.image.tag }}"},"fieldPath":"spec.template.spec.containers[?(@.name==\"pint\")].image"}]'
   {{- end }}
 spec:
   replicas: 1
