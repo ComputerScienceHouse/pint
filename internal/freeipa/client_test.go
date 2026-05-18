@@ -200,6 +200,93 @@ func TestClient_CertRevoke(t *testing.T) {
 	}
 }
 
+func TestClient_ReauthOnStaleSession(t *testing.T) {
+	caKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	caTemplate := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "Stub CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+	}
+	caDER, _ := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
+	caCert, _ := x509.ParseCertificate(caDER)
+
+	var loginCount, rpcCallCount atomic.Int32
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/ipa/session/login_password", func(w http.ResponseWriter, r *http.Request) {
+		loginCount.Add(1)
+		http.SetCookie(w, &http.Cookie{Name: "ipa_session", Value: "stub-session"})
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mux.HandleFunc("/ipa/json", func(w http.ResponseWriter, r *http.Request) {
+		n := rpcCallCount.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		if n == 1 {
+			// Simulate FreeIPA returning 200 with RPC error 2100 when the
+			// session's internal Kerberos ccache has expired.
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"id":     0,
+				"result": nil,
+				"error": map[string]interface{}{
+					"code":    2100,
+					"message": "Insufficient access: SASL(-1): generic failure: GSSAPI Error: Unspecified GSS failure.  Minor code may provide more information (Credential cache is empty)",
+					"name":    "InsufficientAccessError",
+				},
+			})
+			return
+		}
+		leafKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+		leafTemplate := &x509.Certificate{
+			SerialNumber: big.NewInt(2),
+			Subject:      pkix.Name{CommonName: "testuser"},
+			NotBefore:    time.Now().Add(-time.Hour),
+			NotAfter:     time.Now().Add(5 * 365 * 24 * time.Hour),
+		}
+		leafDER, _ := x509.CreateCertificate(rand.Reader, leafTemplate, caCert, &leafKey.PublicKey, caKey)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"id": 0,
+			"result": map[string]interface{}{
+				"result": map[string]interface{}{
+					"certificate": base64.StdEncoding.EncodeToString(leafDER),
+				},
+			},
+			"error": nil,
+		})
+	})
+
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+
+	host := strings.TrimPrefix(srv.URL, "https://")
+	client := freeipa.NewWithHTTPClient(host, "pint", "secret", srv.Client())
+	if err := client.Login(); err != nil {
+		t.Fatal(err)
+	}
+
+	key, _ := rsa.GenerateKey(rand.Reader, 2048)
+	tmpl := &x509.CertificateRequest{Subject: pkix.Name{CommonName: "testuser"}}
+	csrDER, _ := x509.CreateCertificateRequest(rand.Reader, tmpl, key)
+	csrPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+
+	certDER, err := client.CertRequest("testuser@EXAMPLE.COM", string(csrPEM), "ipa", "")
+	if err != nil {
+		t.Fatalf("CertRequest() after stale-session re-auth: %v", err)
+	}
+	if _, err := x509.ParseCertificate(certDER); err != nil {
+		t.Fatalf("returned bytes are not a valid DER certificate: %v", err)
+	}
+	if n := loginCount.Load(); n != 2 {
+		t.Errorf("expected 2 logins (initial + re-auth), got %d", n)
+	}
+	if n := rpcCallCount.Load(); n != 2 {
+		t.Errorf("expected 2 RPC calls (stale error + retry), got %d", n)
+	}
+}
+
 func TestClient_CertRequest(t *testing.T) {
 	srv, _, _ := stubIPA(t)
 	defer srv.Close()
