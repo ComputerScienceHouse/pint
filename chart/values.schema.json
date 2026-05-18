@@ -215,7 +215,7 @@
           "properties": {
             "repository": {
               "type": "string",
-              "default": "pint-freeradius"
+              "default": "freeradius"
             },
             "tag": {
               "type": "string",

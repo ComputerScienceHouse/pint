@@ -78,7 +78,7 @@ service:
 freeradius:
   enabled: true
   image:
-    repository: pint-freeradius
+    repository: freeradius
     tag: "latest"
     pullPolicy: Always
   service:
