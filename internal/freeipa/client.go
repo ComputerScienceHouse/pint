@@ -152,7 +152,7 @@ func (c *Client) CertRevoke(serial int64, caName string, reason int) error {
 
 func (c *Client) rpc(method string, args []interface{}, kwargs map[string]interface{}) (json.RawMessage, error) {
 	result, err := c.doRPC(method, args, kwargs)
-	if err == nil || !errors.Is(err, errUnauthorized) {
+	if err == nil || (!errors.Is(err, errUnauthorized) && !isStaleSessionError(err)) {
 		return result, err
 	}
 	// Serialize re-logins: only one goroutine re-authenticates at a time.
@@ -164,6 +164,14 @@ func (c *Client) rpc(method string, args []interface{}, kwargs map[string]interf
 		return nil, loginErr
 	}
 	return c.doRPC(method, args, kwargs)
+}
+
+// isStaleSessionError reports whether err is a FreeIPA RPC 2100 (InsufficientAccess)
+// caused by an expired Kerberos ccache on the server side. FreeIPA returns this as
+// HTTP 200 with an error body rather than 401, so the normal unauthorized retry path
+// misses it. Re-logging in creates a fresh session and a new ccache entry.
+func isStaleSessionError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Credential cache is empty")
 }
 
 func (c *Client) doRPC(method string, args []interface{}, kwargs map[string]interface{}) (json.RawMessage, error) {
