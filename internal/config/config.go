@@ -42,8 +42,9 @@ type Config struct {
 	// FreeRADIUS status virtual server
 	RADIUSStatusPort   string // PINT_RADIUS_STATUS_PORT: port for the FreeRADIUS status virtual server
 	RADIUSStatusAddr   string // PINT_RADIUS_STATUS_ADDR: override address (host:port) for status queries; replaces per-pod IP (useful when pod IPs are unreachable, e.g. local dev against kind)
-	RadSecCheckCRL     bool   // PINT_RADIUS_RADSEC_CHECK_CRL: enable CRL checking in the RadSec TLS listener (default true; set false for local dev)
-	RadSecProxyProtocol bool  // PINT_RADIUS_RADSEC_PROXY_PROTOCOL: expect HAProxy PROXY protocol header on RadSec connections (default false)
+	RadSecCheckCRL      bool     // PINT_RADIUS_RADSEC_CHECK_CRL: enable CRL checking in the RadSec TLS listener (default true; set false for local dev)
+	RadSecProxyProtocol bool     // PINT_RADIUS_RADSEC_PROXY_PROTOCOL: expect HAProxy PROXY protocol header on RadSec connections (default false)
+	RadSecProxyHosts    []string // PINT_RADIUS_RADSEC_PROXY_HOSTS: comma-separated IPs/CIDRs of trusted proxy hosts (e.g. HAProxy); added as clients so FreeRADIUS accepts their connections before reading the PROXY header
 
 
 	// Apple profile signing
@@ -127,6 +128,13 @@ func Load() (*Config, error) {
 	cfg.IPASkipTLSVerify = os.Getenv("PINT_IPA_SKIP_TLS_VERIFY") == "true"
 	cfg.RadSecCheckCRL = os.Getenv("PINT_RADIUS_RADSEC_CHECK_CRL") != "false"
 	cfg.RadSecProxyProtocol = os.Getenv("PINT_RADIUS_RADSEC_PROXY_PROTOCOL") == "true"
+	if v := os.Getenv("PINT_RADIUS_RADSEC_PROXY_HOSTS"); v != "" {
+		for _, h := range strings.Split(v, ",") {
+			if h = strings.TrimSpace(h); h != "" {
+				cfg.RadSecProxyHosts = append(cfg.RadSecProxyHosts, h)
+			}
+		}
+	}
 	cfg.RootCAName = os.Getenv("PINT_IPA_ROOT_CA_NAME")
 	if cfg.RootCAName == "" {
 		cfg.RootCAName = "ipa"

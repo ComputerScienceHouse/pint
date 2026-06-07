@@ -36,6 +36,7 @@ config:
   # RADIUS / RadSec
   radSecCheckCRL: true          # set false to disable CRL checking in the RadSec TLS listener
   radSecProxyProtocol: true     # set false when HAProxy is not fronting FreeRADIUS
+  radSecProxyHosts: []          # IPs/CIDRs of trusted proxy hosts (e.g. HAProxy); required alongside radSecProxyProtocol so FreeRADIUS accepts connections before reading the PROXY header
   radSecStatusPort: ""          # overrides the FreeRADIUS status server port (default: 18121)
   radSecStatusAddr: ""          # overrides the status server address (host:port); useful in dev when pod IPs are unreachable
 
