@@ -22,10 +22,10 @@ const (
 	KeyRadSecTLS    = "radsec-tls.conf"
 )
 
-// WriteRadiusConfig renders clients.conf from the given client list, patches the
+// WriteRadiusConfig renders clients.conf from the given client list and proxy hosts, patches the
 // key in the named Kubernetes Secret, and triggers a FreeRADIUS rollout restart.
-func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, clients []RadiusClient) error {
-	if err := patchSecretKey(ctx, k8s, namespace, secretName, KeyClientsConf, []byte(RenderClientsConf(clients))); err != nil {
+func WriteRadiusConfig(ctx context.Context, k8s kubernetes.Interface, namespace, secretName, deployment string, clients []RadiusClient, proxyHosts []string) error {
+	if err := patchSecretKey(ctx, k8s, namespace, secretName, KeyClientsConf, []byte(RenderClientsConf(clients, proxyHosts))); err != nil {
 		return err
 	}
 	return Reload(ctx, k8s, namespace, deployment)
@@ -89,7 +89,7 @@ func EnsureConfigSecret(ctx context.Context, k8s kubernetes.Interface, namespace
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
 		Data: map[string][]byte{
 			KeyClientsJSON:  []byte("[]"),
-			KeyClientsConf:  []byte(RenderClientsConf(nil)),
+			KeyClientsConf:  []byte(RenderClientsConf(nil, nil)),
 			KeyStatusSecret: []byte(""),
 			KeyStatus:       []byte(""),
 			KeyRadSecTLS:    []byte(RenderRadSecTLS(true, false)),

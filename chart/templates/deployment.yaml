@@ -78,6 +78,10 @@ spec:
             - name: PINT_RADIUS_RADSEC_PROXY_PROTOCOL
               value: "true"
             {{- end }}
+            {{- if .Values.config.radSecProxyHosts }}
+            - name: PINT_RADIUS_RADSEC_PROXY_HOSTS
+              value: {{ .Values.config.radSecProxyHosts | join "," | quote }}
+            {{- end }}
             {{- if .Values.config.radSecStatusPort }}
             - name: PINT_RADIUS_STATUS_PORT
               value: {{ .Values.config.radSecStatusPort | quote }}

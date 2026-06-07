@@ -96,6 +96,14 @@
           "description": "Enable PROXY protocol on the RadSec listener. Required when HAProxy fronts FreeRADIUS.",
           "default": false
         },
+        "radSecProxyHosts": {
+          "type": "array",
+          "description": "IPs/CIDRs of trusted proxy hosts (e.g. HAProxy). Required alongside radSecProxyProtocol so FreeRADIUS accepts their TCP connections before reading the PROXY header.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "radSecStatusPort": {
           "type": "string",
           "description": "Override the FreeRADIUS status server port (default: 18121)."

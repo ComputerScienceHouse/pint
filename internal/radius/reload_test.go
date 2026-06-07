@@ -34,7 +34,7 @@ func TestWriteRadiusConfig(t *testing.T) {
 		{Username: "mbillow", IPCIDR: nil},
 	}
 
-	if err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-config", "", clients); err != nil {
+	if err := radius.WriteRadiusConfig(ctx, k8s, "default", "pint-config", "", clients, nil); err != nil {
 		t.Fatalf("WriteRadiusConfig() error: %v", err)
 	}
 

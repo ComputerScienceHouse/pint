@@ -195,7 +195,7 @@ func (s *Server) commitStore(c *gin.Context, store *radius.ClientStore) error {
 		s.fail(c, http.StatusInternalServerError, "radius store save failed", err)
 		return err
 	}
-	if err := radius.WriteRadiusConfig(ctx, s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret, s.Cfg.FreeRADIUSDeployment, store.All()); err != nil {
+	if err := radius.WriteRadiusConfig(ctx, s.K8s, s.Cfg.Namespace, s.Cfg.ConfigSecret, s.Cfg.FreeRADIUSDeployment, store.All(), s.Cfg.RadSecProxyHosts); err != nil {
 		s.fail(c, http.StatusInternalServerError, "radius config write failed", err)
 		return err
 	}

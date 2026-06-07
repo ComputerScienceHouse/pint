@@ -96,6 +96,13 @@ func main() {
 	if err := radius.WriteRadSecTLS(ctx, k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, cfg.RadSecCheckCRL, cfg.RadSecProxyProtocol); err != nil {
 		log.Fatal("write radsec-tls.conf failed", zap.Error(err))
 	}
+	clientStore := radius.NewClientStore(k8sClient, cfg.Namespace, cfg.ConfigSecret)
+	if err := clientStore.Load(ctx); err != nil {
+		log.Fatal("load radius client store failed", zap.Error(err))
+	}
+	if err := radius.WriteRadiusConfig(ctx, k8sClient, cfg.Namespace, cfg.ConfigSecret, cfg.FreeRADIUSDeployment, clientStore.All(), cfg.RadSecProxyHosts); err != nil {
+		log.Fatal("write clients.conf failed", zap.Error(err))
+	}
 
 	// Fetch CA certs in parallel.
 	var (
